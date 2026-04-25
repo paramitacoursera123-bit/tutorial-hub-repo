@@ -1,0 +1,91 @@
+﻿<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Tutorial Platform Preview</title>
+    <script src='https://cdn.tailwindcss.com'></script>
+</head>
+<body class='bg-gray-50 min-h-screen'>
+    <div class='container mx-auto px-4 py-8'>
+        <h1 class='text-4xl font-bold text-center text-gray-900 mb-8'>
+            Tutorial Platform Preview
+        </h1>
+        
+        <div class='max-w-4xl mx-auto space-y-8'>
+            <div class='bg-white rounded-lg shadow-md p-6'>
+                <h2 class='text-2xl font-semibold mb-4'>Navigation Bar</h2>
+                <div class='bg-gray-800 text-white p-4 rounded'>
+                    <div class='flex justify-between items-center'>
+                        <div class='text-xl font-bold text-blue-400'>Tutorial Platform</div>
+                        <div class='flex space-x-4'>
+                            <span>Tutorials</span>
+                            <span>Login</span>
+                            <span>Sign Up</span>
+                            <span>🌙</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class='bg-white rounded-lg shadow-md p-6'>
+                <h2 class='text-2xl font-semibold mb-4'>Hero Section</h2>
+                <div class='text-center py-12 bg-gradient-to-r from-blue-50 to-purple-50 rounded'>
+                    <h1 class='text-4xl font-bold text-gray-900 mb-6'>
+                        Master New Skills with <span class='text-blue-600'>Interactive Tutorials</span>
+                    </h1>
+                    <p class='text-xl text-gray-600 mb-8'>
+                        Discover comprehensive tutorials, track your progress, and join a community of learners.
+                    </p>
+                    <div class='space-x-4'>
+                        <button class='bg-blue-600 text-white px-8 py-3 rounded-lg font-medium'>Browse Tutorials</button>
+                        <button class='bg-gray-200 text-gray-900 px-8 py-3 rounded-lg font-medium'>Get Started</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class='bg-white rounded-lg shadow-md p-6'>
+                <h2 class='text-2xl font-semibold mb-4'>Sample Tutorials</h2>
+                <div class='grid md:grid-cols-3 gap-6'>
+                    <div class='border rounded-lg overflow-hidden'>
+                        <div class='h-32 bg-gradient-to-r from-blue-400 to-purple-500'></div>
+                        <div class='p-4'>
+                            <span class='text-sm text-blue-600 font-medium'>React</span>
+                            <h3 class='font-semibold mt-1'>Getting Started with React</h3>
+                            <p class='text-sm text-gray-600 mt-2'>Learn components, props, state, and hooks</p>
+                        </div>
+                    </div>
+                    
+                    <div class='border rounded-lg overflow-hidden'>
+                        <div class='h-32 bg-gradient-to-r from-green-400 to-blue-500'></div>
+                        <div class='p-4'>
+                            <span class='text-sm text-blue-600 font-medium'>JavaScript</span>
+                            <h3 class='font-semibold mt-1'>ES6+ Features</h3>
+                            <p class='text-sm text-gray-600 mt-2'>Arrow functions, promises, async/await</p>
+                        </div>
+                    </div>
+                    
+                    <div class='border rounded-lg overflow-hidden'>
+                        <div class='h-32 bg-gradient-to-r from-purple-400 to-pink-500'></div>
+                        <div class='p-4'>
+                            <span class='text-sm text-blue-600 font-medium'>CSS</span>
+                            <h3 class='font-semibold mt-1'>CSS Grid Layout</h3>
+                            <p class='text-sm text-gray-600 mt-2'>Create responsive layouts with ease</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class='bg-blue-50 border border-blue-200 rounded-lg p-6'>
+                <h2 class='text-2xl font-semibold text-blue-900 mb-4'>🚀 Next Steps</h2>
+                <ol class='space-y-3'>
+                    <li><strong>Set up Firebase:</strong> Create project and enable services</li>
+                    <li><strong>Configure Environment:</strong> Add Firebase config to .env</li>
+                    <li><strong>Run Development Server:</strong> Use <code class='bg-gray-200 px-1 rounded'>npm run dev</code></li>
+                    <li><strong>Create Admin User:</strong> Set role to 'admin' in Firestore</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
