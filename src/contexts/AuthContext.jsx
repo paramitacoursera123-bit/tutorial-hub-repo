@@ -4,12 +4,17 @@ import {
   signOut, 
   onAuthStateChanged,
   GoogleAuthProvider,
-  GithubAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
+
+// Admin emails list - hardcoded admins
+const ADMIN_EMAILS = [
+  'pathikritsan80@gmail.com',
+  'paramitacoursera123@gmail.com'
+];
 
 const AuthContext = createContext();
 
@@ -67,13 +72,30 @@ export function AuthProvider({ children }) {
       setError(null);
       const result = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Create user profile in Firestore (regular user, not admin)
-      await setDoc(doc(db, 'users', result.user.uid), {
-        email,
-        displayName,
-        role: 'user',
-        createdAt: new Date(),
-      });
+      // Check if this email should be an admin
+      const isAdminEmail = ADMIN_EMAILS.includes(email.toLowerCase());
+      
+      if (isAdminEmail) {
+        // Create admin user in adminUsers collection
+        await setDoc(doc(db, 'adminUsers', result.user.uid), {
+          uid: result.user.uid,
+          email,
+          displayName,
+          photoURL: null,
+          role: 'admin',
+          createdAt: new Date(),
+          lastLogin: new Date()
+        }, { merge: true });
+      } else {
+        // Create regular user in users collection
+        await setDoc(doc(db, 'users', result.user.uid), {
+          uid: result.user.uid,
+          email,
+          displayName,
+          role: 'user',
+          createdAt: new Date()
+        }, { merge: true });
+      }
       
       return result;
     } catch (err) {
@@ -131,27 +153,6 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function loginWithGithub() {
-    try {
-      setError(null);
-      const provider = new GithubAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      
-      // Add user to adminUsers collection (all OAuth users are admins)
-      await addAdminUser(result.user);
-      
-      return result;
-    } catch (err) {
-      const errorMessage = err.code === 'auth/popup-closed-by-user' 
-        ? 'Sign in was cancelled' 
-        : err.code === 'auth/popup-blocked'
-        ? 'Sign in popup was blocked. Please allow popups for this site.'
-        : err.message;
-      setError(errorMessage);
-      throw err;
-    }
-  }
-
   async function logout() {
     try {
       setError(null);
@@ -171,8 +172,19 @@ export function AuthProvider({ children }) {
         if (user) {
           setCurrentUser(user);
           
-          // Check if user is an admin
-          const isAdmin = await checkAdminStatus(user.uid);
+          // Check if user is an admin (OAuth user or email-based admin)
+          let isAdmin = false;
+          
+          // Check if in adminUsers collection
+          const adminUserRef = doc(db, 'adminUsers', user.uid);
+          const adminSnap = await getDoc(adminUserRef);
+          isAdmin = adminSnap.exists();
+          
+          // Also check if email is in admin list
+          if (!isAdmin && ADMIN_EMAILS.includes(user.email?.toLowerCase())) {
+            isAdmin = true;
+          }
+          
           setUserRole(isAdmin ? 'admin' : 'user');
         } else {
           setCurrentUser(null);
@@ -196,7 +208,6 @@ export function AuthProvider({ children }) {
     signup,
     login,
     loginWithGoogle,
-    loginWithGithub,
     logout,
     isAdmin: userRole === 'admin'
   };

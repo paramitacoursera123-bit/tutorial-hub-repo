@@ -1,49 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Filter, Clock, User } from 'lucide-react';
-
-// Sample tutorials data (fallback when Firestore is not available)
-const sampleTutorials = [
-  {
-    id: '1',
-    title: "Getting Started with React",
-    description: "Learn the fundamentals of React development including components, props, state, and hooks.",
-    category: "React",
-    readTime: 15,
-    isPremium: false,
-    authorName: "Tutorial Platform Team",
-    createdAt: new Date(),
-    thumbnail: "",
-    videoUrl: "",
-    sections: []
-  },
-  {
-    id: '2',
-    title: "JavaScript ES6+ Features",
-    description: "Master modern JavaScript features including arrow functions, destructuring, promises, and async/await.",
-    category: "JavaScript",
-    readTime: 20,
-    isPremium: false,
-    authorName: "Tutorial Platform Team",
-    createdAt: new Date(),
-    thumbnail: "",
-    videoUrl: "",
-    sections: []
-  },
-  {
-    id: '3',
-    title: "CSS Grid Layout Complete Guide",
-    description: "Learn CSS Grid layout system for creating complex, responsive web layouts with ease.",
-    category: "CSS",
-    readTime: 25,
-    isPremium: false,
-    authorName: "Tutorial Platform Team",
-    createdAt: new Date(),
-    thumbnail: "",
-    videoUrl: "",
-    sections: []
-  }
-];
+import { getAllTutorials, searchTutorials } from '../utils/firebaseHelpers';
 
 function Tutorials() {
   const [tutorials, setTutorials] = useState([]);
@@ -53,59 +11,22 @@ function Tutorials() {
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
-    fetchTutorials();
+    fetchTutorialsFromFirestore();
   }, []);
 
-  const fetchTutorials = async () => {
-    // Use sample data immediately for fast loading
-    setTutorials(sampleTutorials);
-    const categorySet = new Set(sampleTutorials.map(t => t.category));
-    setCategories(['all', ...Array.from(categorySet)]);
-    setLoading(false);
-
-    // Try to load admin-created tutorials from localStorage
-    const adminTutorials = localStorage.getItem('adminTutorials');
-    if (adminTutorials) {
-      const parsedAdminTutorials = JSON.parse(adminTutorials);
-      setTutorials(parsedAdminTutorials);
-      const adminCategorySet = new Set(parsedAdminTutorials.map(t => t.category));
-      setCategories(['all', ...Array.from(adminCategorySet)]);
-    }
-
-    // Try to fetch from Firestore in the background (optional)
+  const fetchTutorialsFromFirestore = async () => {
     try {
-      // const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
-      // const { db } = await import('../firebase/config');
-
-      const tutorialsRef = collection(db, 'tutorials');
-      const q = query(tutorialsRef, orderBy('createdAt', 'desc'));
-
-      // Add timeout to Firebase request
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Firebase timeout')), 3000)
-      );
-
-      const querySnapshot = await Promise.race([getDocs(q), timeoutPromise]);
-
-      const tutorialsData = [];
-      const firebaseCategorySet = new Set();
-
-      querySnapshot.forEach((doc) => {
-        const tutorial = { id: doc.id, ...doc.data() };
-        tutorialsData.push(tutorial);
-        if (tutorial.category) {
-          firebaseCategorySet.add(tutorial.category);
-        }
-      });
-
-      if (tutorialsData.length > 0) {
-        // Replace with real Firebase data
-        setTutorials(tutorialsData);
-        setCategories(['all', ...Array.from(firebaseCategorySet)]);
-      }
+      setLoading(true);
+      const data = await getAllTutorials();
+      setTutorials(data);
+      
+      // Extract unique categories
+      const categorySet = new Set(data.map(t => t.category));
+      setCategories(['all', ...Array.from(categorySet)]);
     } catch (error) {
-      // Keep using local data, Firebase failed
-      console.log('Using local data, Firebase not available:', error.message);
+      console.error('Error loading tutorials:', error);
+    } finally {
+      setLoading(false);
     }
   };
 

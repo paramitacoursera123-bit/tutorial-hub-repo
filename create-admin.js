@@ -4,12 +4,12 @@ import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAMbVTP4kooozKDP6MDkeasruMfMO48k_Y",
-  authDomain: "ai-augmentdynamic-tutorial-app.firebaseapp.com",
-  projectId: "ai-augmentdynamic-tutorial-app",
-  storageBucket: "ai-augmentdynamic-tutorial-app.firebasestorage.app",
-  messagingSenderId: "842805457729",
-  appId: "1:842805457729:web:dfafeffb67b8832f2ba7c0"
+  apiKey: "AIzaSyBfEEgYOErOFobYuNN27OBdXA_O6C6NVBs",
+  authDomain: "dynamic-tutorial-website.firebaseapp.com",
+  projectId: "dynamic-tutorial-website",
+  storageBucket: "dynamic-tutorial-website.firebasestorage.app",
+  messagingSenderId: "175702939690",
+  appId: "1:175702939690:web:e5f1f52890982347334b53"
 };
 
 // Initialize Firebase

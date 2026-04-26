@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Eye, Upload, Save } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Upload, Save, Users, BookOpen } from 'lucide-react';
+import UserManagement from '../components/UserManagement';
+import { createTutorial, updateTutorial, deleteTutorial, getAllTutorials } from '../utils/firebaseHelpers';
 
 // Sample tutorials data (same as in Tutorials.jsx)
 const initialSampleTutorials = [
@@ -280,6 +282,7 @@ Use media queries and grid properties to create responsive layouts.
 
 function AdminDashboard() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('tutorials');
   const [tutorials, setTutorials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -427,25 +430,55 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Admin Dashboard
-        </h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <Plus size={18} />
-          {showForm ? 'Cancel' : 'Add Tutorial'}
-        </button>
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <div className="flex gap-8">
+          <button
+            onClick={() => setActiveTab('tutorials')}
+            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+              activeTab === 'tutorials'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <BookOpen size={20} />
+            Manage Tutorials
+          </button>
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+              activeTab === 'users'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <Users size={20} />
+            User Management
+          </button>
+        </div>
       </div>
 
-      {showForm && (
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-            {editingTutorial ? 'Edit Tutorial' : 'Add New Tutorial'}
-          </h2>
-          
+      {/* Tutorials Tab */}
+      {activeTab === 'tutorials' && (
+        <div className="space-y-8">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Admin Dashboard
+            </h1>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <Plus size={18} />
+              {showForm ? 'Cancel' : 'Add Tutorial'}
+            </button>
+          </div>
+
+          {showForm && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+                {editingTutorial ? 'Edit Tutorial' : 'Add New Tutorial'}
+              </h2>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid md:grid-cols-2 gap-4">
               <div>
@@ -637,14 +670,14 @@ function AdminDashboard() {
               </button>
             </div>
           </form>
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* Tutorials List */}
-      <div className="card">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-          Manage Tutorials ({tutorials.length})
-        </h2>
+          {/* Tutorials List */}
+          <div className="card">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+              Manage Tutorials ({tutorials.length})
+            </h2>
         
         {tutorials.length === 0 ? (
           <p className="text-gray-600 dark:text-gray-300">No tutorials found.</p>
@@ -677,7 +710,14 @@ function AdminDashboard() {
             ))}
           </div>
         )}
-      </div>
+          </div>
+        </div>
+      )}
+
+      {/* Users Tab */}
+      {activeTab === 'users' && (
+        <UserManagement />
+      )}
     </div>
   );
 }
