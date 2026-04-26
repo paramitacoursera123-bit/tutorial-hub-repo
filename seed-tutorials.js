@@ -4,12 +4,12 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, on
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || "AIzaSyBfEEgYOErOFobYuNN27OBdXA_O6C6NVBs",
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "dynamic-tutorial-website.firebaseapp.com",
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || "dynamic-tutorial-website",
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "dynamic-tutorial-website.firebasestorage.app",
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "175702939690",
-  appId: process.env.VITE_FIREBASE_APP_ID || "1:175702939690:web:e5f1f52890982347334b53"
+  apiKey: process.env.VITE_FIREBASE_API_KEY ,
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN ,
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID ,
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET ,
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID ,
+  appId: process.env.VITE_FIREBASE_APP_ID 
 };
 
 // Initialize Firebase

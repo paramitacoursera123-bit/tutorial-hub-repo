@@ -4,12 +4,12 @@ import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBfEEgYOErOFobYuNN27OBdXA_O6C6NVBs",
-  authDomain: "dynamic-tutorial-website.firebaseapp.com",
-  projectId: "dynamic-tutorial-website",
-  storageBucket: "dynamic-tutorial-website.firebasestorage.app",
-  messagingSenderId: "175702939690",
-  appId: "1:175702939690:web:e5f1f52890982347334b53"
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
 };
 
 // Initialize Firebase
