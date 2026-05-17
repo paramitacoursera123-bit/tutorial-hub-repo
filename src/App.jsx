@@ -12,6 +12,7 @@ import Register from './pages/Register';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/ProtectedRoute';
+import './debug'; // Debug helper for console access
 import './App.css';
 
 function App() {

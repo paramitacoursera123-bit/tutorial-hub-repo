@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Search, Filter, Clock, User } from 'lucide-react';
 import { getAllTutorials, searchTutorials } from '../utils/firebaseHelpers';
 
@@ -9,10 +9,11 @@ function Tutorials() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState([]);
+  const location = useLocation();
 
   useEffect(() => {
     fetchTutorialsFromFirestore();
-  }, []);
+  }, [location.pathname]);
 
   const fetchTutorialsFromFirestore = async () => {
     try {

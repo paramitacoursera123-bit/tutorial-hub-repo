@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Eye, Upload, Save, Users, BookOpen, BarChart3, Check, X } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
 import Analytics from '../components/Analytics';
-import { createTutorial, updateTutorial, deleteTutorial, getAllTutorials } from '../utils/firebaseHelpers';
+import { createTutorial, updateTutorial, deleteTutorial, getAllTutorials, getTutorial } from '../utils/firebaseHelpers';
 
 // Sample tutorials data (same as in Tutorials.jsx)
 const initialSampleTutorials = [
@@ -390,6 +390,7 @@ function AdminDashboard() {
   const handlePublish = async () => {
     try {
       setUploading(true);
+      setError('');
 
       await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -398,22 +399,25 @@ function AdminDashboard() {
         status: 'published',
         thumbnail: thumbnailFile ? URL.createObjectURL(thumbnailFile) : formData.thumbnail,
         authorName: 'Admin',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        createdAt: editingTutorial?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        versions: editingTutorial?.versions || []
       };
 
-      // Create in public tutorials (Firestore or localStorage fallback)
+      // Create/update in public tutorials (Firestore or localStorage fallback)
       try {
         if (editingTutorial && editingTutorial.id) {
-          // Try to update existing public tutorial (will record versions in helpers)
-          await updateTutorial(editingTutorial.id, tutorialData);
-          console.log('Updated public tutorial id:', editingTutorial.id);
+          // Try to create/update with same ID to maintain consistency
+          const publishedId = await createTutorial(tutorialData, editingTutorial.id);
+          console.log('Published tutorial id:', publishedId);
         } else {
+          // New tutorial, create it (will generate new ID)
           const newId = await createTutorial(tutorialData);
           console.log('Published tutorial id:', newId);
         }
       } catch (err) {
         console.error('Error publishing tutorial:', err);
+        throw err;
       }
 
       // Also save/update in admin list for management
@@ -423,9 +427,11 @@ function AdminDashboard() {
         : [...tutorials, { ...tutorialData, id: newIdForAdmin }];
 
       saveTutorialsToStorage(updatedTutorials);
+      setSuccessMessage('Tutorial published successfully!');
       resetForm();
     } catch (error) {
       console.error('Error publishing tutorial:', error);
+      setError(`Failed to publish tutorial: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -438,6 +444,7 @@ function AdminDashboard() {
       description: tutorial.description || '',
       content: tutorial.content || '',
       category: tutorial.category || '',
+      status: tutorial.status || 'draft',
       readTime: tutorial.readTime || 5,
       isPremium: tutorial.isPremium || false,
       thumbnail: tutorial.thumbnail || '',
@@ -450,8 +457,46 @@ function AdminDashboard() {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this tutorial?')) return;
 
-    const updatedTutorials = tutorials.filter(tutorial => tutorial.id !== id);
-    saveTutorialsToStorage(updatedTutorials);
+    try {
+      setError('');
+      
+      console.log('🗑️ DELETE STARTED for tutorial ID:', id);
+      console.log('📋 Admin tutorials before delete:', tutorials.map(t => ({ id: t.id, title: t.title })));
+      
+      // Delete from public tutorials storage (Firestore or localStorage 'tutorials')
+      try {
+        await deleteTutorial(id);
+        console.log('✅ Tutorial deleted from public storage:', id);
+      } catch (firestoreError) {
+        console.warn('⚠️ Firestore delete failed, attempting localStorage fallback:', firestoreError.message);
+        
+        // Manually delete from localStorage 'tutorials' as fallback
+        try {
+          const publicTutorials = JSON.parse(localStorage.getItem('tutorials') || '[]');
+          console.log('📋 Public tutorials before manual delete:', publicTutorials.map(t => ({ id: t.id, title: t.title })));
+          
+          const filtered = publicTutorials.filter(t => t.id !== id);
+          
+          console.log('📋 Public tutorials after filter:', filtered.map(t => ({ id: t.id, title: t.title })));
+          localStorage.setItem('tutorials', JSON.stringify(filtered));
+          console.log('✅ Tutorial deleted from localStorage tutorials:', id);
+        } catch (storageError) {
+          console.error('Failed to delete from localStorage:', storageError);
+        }
+      }
+
+      // Delete from admin storage
+      const updatedTutorials = tutorials.filter(tutorial => tutorial.id !== id);
+      console.log('📋 Admin tutorials after delete:', updatedTutorials.map(t => ({ id: t.id, title: t.title })));
+      
+      saveTutorialsToStorage(updatedTutorials);
+      
+      setSuccessMessage('Tutorial deleted successfully!');
+      console.log('✅ Tutorial deleted successfully from all storage:', id);
+    } catch (error) {
+      console.error('Error deleting tutorial:', error);
+      setError(`Failed to delete tutorial: ${error.message}`);
+    }
   };
 
   const resetForm = () => {
@@ -892,15 +937,19 @@ function AdminDashboard() {
                             const tutorialData = {
                               ...tutorial,
                               status: 'published',
-                              updatedAt: new Date().toISOString()
+                              createdAt: tutorial.createdAt || new Date().toISOString(),
+                              updatedAt: new Date().toISOString(),
+                              versions: tutorial.versions || []
                             };
 
-                            // Try to save to Firestore (will be available in public tutorials)
+                            // Publish to public tutorials storage
                             try {
-                              await updateTutorial(tutorial.id, tutorialData);
-                              console.log('Tutorial saved to Firestore:', tutorial.id);
-                            } catch (firestoreError) {
-                              console.warn('Firestore save failed (will use localStorage):', firestoreError.message);
+                              // Create the tutorial in public storage with same ID
+                              const publishedId = await createTutorial(tutorialData, tutorial.id);
+                              console.log('Tutorial published to public storage:', publishedId);
+                            } catch (publicError) {
+                              console.error('Error publishing to public storage:', publicError);
+                              throw publicError;
                             }
 
                             // Update local admin storage to mark as published

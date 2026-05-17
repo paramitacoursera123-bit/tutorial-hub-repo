@@ -183,8 +183,12 @@ export async function demoteAdminToUser(userId, email, displayName) {
 /**
  * Create a new tutorial (Admin only)
  * Falls back to localStorage if Firestore is unavailable
+ * @param {Object} tutorialData - Tutorial data
+ * @param {String} tutorialId - Optional: preserve this ID instead of generating a new one
  */
-export async function createTutorial(tutorialData) {
+export async function createTutorial(tutorialData, tutorialId = null) {
+  console.log('🔵 createTutorial called with ID:', tutorialId, 'Status:', tutorialData?.status);
+  
   try {
     const newTutorial = {
       ...tutorialData,
@@ -192,15 +196,28 @@ export async function createTutorial(tutorialData) {
       updatedAt: new Date().toISOString(),
       versions: []
     };
-    const docRef = await addDoc(collection(db, 'tutorials'), newTutorial);
-    return docRef.id;
+    
+    if (tutorialId) {
+      // If ID is provided, use setDoc to preserve the ID
+      const docRef = doc(db, 'tutorials', tutorialId);
+      await setDoc(docRef, newTutorial, { merge: true });
+      console.log('✅ Tutorial created in Firestore with preserved ID:', tutorialId);
+      return tutorialId;
+    } else {
+      // Otherwise generate new ID
+      const docRef = await addDoc(collection(db, 'tutorials'), newTutorial);
+      console.log('✅ Tutorial created in Firestore with new ID:', docRef.id);
+      return docRef.id;
+    }
   } catch (error) {
-    console.warn('Firestore unavailable, using localStorage:', error.message);
+    console.warn('⚠️ Firestore unavailable, using localStorage:', error.message);
     
     // Fallback to localStorage
     const tutorials = getTutorialsFromStorage();
+    console.log('📋 Current tutorials in localStorage before create:', tutorials.map(t => ({ id: t.id, status: t.status })));
+    
     const newTutorial = {
-      id: generateId(),
+      id: tutorialId || generateId(),
       ...tutorialData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -208,9 +225,22 @@ export async function createTutorial(tutorialData) {
       views: 0,
       likes: 0
     };
-    tutorials.push(newTutorial);
+    
+    // Check if tutorial already exists
+    const existingIndex = tutorials.findIndex(t => t.id === newTutorial.id);
+    if (existingIndex !== -1) {
+      // Update existing
+      tutorials[existingIndex] = newTutorial;
+      console.log('🔄 Updated existing tutorial in localStorage:', newTutorial.id);
+    } else {
+      // Add new
+      tutorials.push(newTutorial);
+      console.log('➕ Added new tutorial to localStorage:', newTutorial.id);
+    }
+    
     saveTutorialsToStorage(tutorials);
-    console.log('✅ Tutorial saved to localStorage:', newTutorial.id);
+    console.log('💾 Saved to localStorage. Total tutorials now:', tutorials.length);
+    console.log('📋 All tutorials in localStorage:', tutorials.map(t => ({ id: t.id, status: t.status })));
     return newTutorial.id;
   }
 }
@@ -219,6 +249,8 @@ export async function createTutorial(tutorialData) {
  * Get all tutorials from Firestore or localStorage
  */
 export async function getAllTutorials() {
+  console.log('🔵 getAllTutorials called');
+  
   try {
     const tutorialsRef = collection(db, 'tutorials');
     const q = query(tutorialsRef, orderBy('createdAt', 'desc'));
@@ -228,21 +260,33 @@ export async function getAllTutorials() {
       ...doc.data()
     }));
     
+    console.log('📚 Firestore returned', firestoreTutorials.length, 'tutorials:', 
+      firestoreTutorials.map(t => ({ id: t.id, title: t.title, status: t.status })));
+    
     // If Firestore returns data, use it
     if (firestoreTutorials.length > 0) {
       return firestoreTutorials;
     }
     
     // Otherwise try localStorage
-    return getTutorialsFromStorage().sort((a, b) => 
+    const localTutorials = getTutorialsFromStorage().sort((a, b) => 
       new Date(b.createdAt) - new Date(a.createdAt)
     );
+    console.log('📋 Using localStorage:', localTutorials.length, 'tutorials:', 
+      localTutorials.map(t => ({ id: t.id, title: t.title, status: t.status })));
+    
+    return localTutorials;
   } catch (error) {
-    console.warn('Firestore unavailable, using localStorage:', error.message);
+    console.warn('⚠️ Firestore unavailable, using localStorage:', error.message);
+    
     // Fallback to localStorage
-    return getTutorialsFromStorage().sort((a, b) => 
+    const localTutorials = getTutorialsFromStorage().sort((a, b) => 
       new Date(b.createdAt) - new Date(a.createdAt)
     );
+    console.log('📋 Fallback - Using localStorage:', localTutorials.length, 'tutorials:', 
+      localTutorials.map(t => ({ id: t.id, title: t.title, status: t.status })));
+    
+    return localTutorials;
   }
 }
 
@@ -325,16 +369,36 @@ export async function updateTutorial(tutorialId, updates) {
  * Delete a tutorial (Admin only) - Firestore with localStorage fallback
  */
 export async function deleteTutorial(tutorialId) {
+  let firestoreDeleted = false;
+
   try {
     await deleteDoc(doc(db, 'tutorials', tutorialId));
+    firestoreDeleted = true;
+    console.log('✅ Tutorial delete request sent to Firestore:', tutorialId);
   } catch (error) {
-    console.warn('Firestore unavailable, using localStorage:', error.message);
-    
-    // Fallback to localStorage
+    console.warn('⚠️ Firestore delete failed:', error.message);
+  }
+
+  // Always remove the tutorial from localStorage fallback as well,
+  // since Firestore may be available but the item still exists only in localStorage.
+  try {
     const tutorials = getTutorialsFromStorage();
+    console.log('📋 Tutorials in localStorage before delete:', tutorials.map(t => ({ id: t.id, status: t.status })));
+
     const filtered = tutorials.filter(t => t.id !== tutorialId);
-    saveTutorialsToStorage(filtered);
-    console.log('✅ Tutorial deleted from localStorage:', tutorialId);
+    if (filtered.length < tutorials.length) {
+      saveTutorialsToStorage(filtered);
+      console.log('✅ Tutorial deleted from localStorage fallback:', tutorialId);
+      console.log('📋 Tutorials in localStorage after delete:', filtered.map(t => ({ id: t.id, status: t.status })));
+    } else {
+      console.log('ℹ️ Tutorial not found in localStorage fallback:', tutorialId);
+    }
+  } catch (storageError) {
+    console.error('❌ Failed to delete tutorial from localStorage fallback:', storageError);
+  }
+
+  if (!firestoreDeleted) {
+    console.warn('⚠️ Tutorial was removed from localStorage fallback, but Firestore delete did not succeed.');
   }
 }
 
