@@ -11,7 +11,7 @@ function Register() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signup, loginWithGoogle, isAdmin } = useAuth();
+  const { signup, loginWithGoogle, refreshUserRole } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -36,21 +36,8 @@ function Register() {
       setError('');
       setLoading(true);
       await signup(formData.email, formData.password, formData.displayName);
-      
-      // Check if this email is an admin email
-      const ADMIN_EMAILS = [
-        'pathikritsan80@gmail.com',
-        'paramitacoursera123@gmail.com'
-      ];
-      
-      const isAdminEmail = ADMIN_EMAILS.includes(formData.email.toLowerCase());
-      
-      // Redirect to appropriate page
-      if (isAdminEmail) {
-        navigate('/admin');
-      } else {
-        navigate('/tutorials');
-      }
+      const isAdmin = await refreshUserRole();
+      navigate(isAdmin ? '/admin' : '/tutorials');
     } catch (error) {
       setError('Failed to create account. Please try again.');
       console.error(error);
@@ -64,8 +51,8 @@ function Register() {
       setError('');
       setLoading(true);
       await loginWithGoogle();
-      // Redirect to admin portal after successful OAuth
-      navigate('/admin');
+      const isAdmin = await refreshUserRole();
+      navigate(isAdmin ? '/admin' : '/tutorials');
     } catch (error) {
       if (error.code === 'auth/popup-closed-by-user') {
         setError('Sign up cancelled.');

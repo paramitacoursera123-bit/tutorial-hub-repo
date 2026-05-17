@@ -528,3 +528,146 @@ export async function getUserSavedTutorials(userId) {
     return [];
   }
 }
+
+// ========================
+// ANALYTICS FUNCTIONS
+// ========================
+
+/**
+ * Get total platform analytics
+ */
+export async function getTotalAnalytics() {
+  try {
+    const tutorials = await getAllTutorials();
+    const adminsSnapshot = await getDocs(collection(db, 'adminUsers'));
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    
+    const totalViews = tutorials.reduce((sum, t) => sum + (t.views || 0), 0);
+    const totalLikes = tutorials.reduce((sum, t) => sum + (t.likes || 0), 0);
+    const totalTutorials = tutorials.length;
+    const totalUsers = adminsSnapshot.size + usersSnapshot.size;
+    
+    return {
+      totalTutorials,
+      totalUsers,
+      totalViews,
+      totalLikes,
+      averageViewsPerTutorial: totalTutorials > 0 ? Math.round(totalViews / totalTutorials) : 0
+    };
+  } catch (error) {
+    console.error('Error getting total analytics:', error);
+    return {
+      totalTutorials: 0,
+      totalUsers: 0,
+      totalViews: 0,
+      totalLikes: 0,
+      averageViewsPerTutorial: 0
+    };
+  }
+}
+
+/**
+ * Get top tutorials by views
+ */
+export async function getTopTutorialsByViews(limit = 5) {
+  try {
+    const tutorials = await getAllTutorials();
+    return tutorials
+      .sort((a, b) => (b.views || 0) - (a.views || 0))
+      .slice(0, limit)
+      .map(t => ({
+        id: t.id,
+        title: t.title,
+        views: t.views || 0,
+        likes: t.likes || 0,
+        category: t.category
+      }));
+  } catch (error) {
+    console.error('Error getting top tutorials by views:', error);
+    return [];
+  }
+}
+
+/**
+ * Get top tutorials by rating
+ */
+export async function getTopTutorialsByRating(limit = 5) {
+  try {
+    const tutorials = await getAllTutorials();
+    return tutorials
+      .filter(t => (t.ratingCount || 0) > 0)
+      .sort((a, b) => (b.ratingAverage || 0) - (a.ratingAverage || 0))
+      .slice(0, limit)
+      .map(t => ({
+        id: t.id,
+        title: t.title,
+        rating: (t.ratingAverage || 0).toFixed(1),
+        ratingCount: t.ratingCount || 0,
+        category: t.category
+      }));
+  } catch (error) {
+    console.error('Error getting top tutorials by rating:', error);
+    return [];
+  }
+}
+
+/**
+ * Get recent user signups
+ */
+export async function getRecentUsers(limit = 10) {
+  try {
+    const adminsSnapshot = await getDocs(collection(db, 'adminUsers'));
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    
+    const allUsers = [
+      ...adminsSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        role: 'admin'
+      })),
+      ...usersSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        role: 'user'
+      }))
+    ];
+    
+    return allUsers
+      .sort((a, b) => {
+        const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date();
+        const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date();
+        return dateB - dateA;
+      })
+      .slice(0, limit)
+      .map(u => ({
+        email: u.email,
+        displayName: u.displayName || 'Unknown',
+        role: u.role,
+        createdAt: u.createdAt?.toDate?.() || new Date(u.createdAt)
+      }));
+  } catch (error) {
+    console.error('Error getting recent users:', error);
+    return [];
+  }
+}
+
+/**
+ * Get category distribution
+ */
+export async function getCategoryDistribution() {
+  try {
+    const tutorials = await getAllTutorials();
+    const categoryMap = {};
+    
+    tutorials.forEach(t => {
+      const category = t.category || 'Uncategorized';
+      categoryMap[category] = (categoryMap[category] || 0) + 1;
+    });
+    
+    return Object.entries(categoryMap).map(([name, count]) => ({
+      name,
+      count
+    })).sort((a, b) => b.count - a.count);
+  } catch (error) {
+    console.error('Error getting category distribution:', error);
+    return [];
+  }
+}

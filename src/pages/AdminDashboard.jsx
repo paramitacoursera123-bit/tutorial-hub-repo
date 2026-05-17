@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Eye, Upload, Save, Users, BookOpen } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Upload, Save, Users, BookOpen, BarChart3 } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
+import Analytics from '../components/Analytics';
 import { createTutorial, updateTutorial, deleteTutorial, getAllTutorials } from '../utils/firebaseHelpers';
 
 // Sample tutorials data (same as in Tutorials.jsx)
@@ -282,7 +283,7 @@ Use media queries and grid properties to create responsive layouts.
 
 function AdminDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('tutorials');
+  const [activeTab, setActiveTab] = useState('analytics');
   const [tutorials, setTutorials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -432,10 +433,21 @@ function AdminDashboard() {
     <div className="space-y-8">
       {/* Tab Navigation */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <div className="flex gap-8">
+        <div className="flex gap-8 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'analytics'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <BarChart3 size={20} />
+            Analytics
+          </button>
           <button
             onClick={() => setActiveTab('tutorials')}
-            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'tutorials'
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -446,7 +458,7 @@ function AdminDashboard() {
           </button>
           <button
             onClick={() => setActiveTab('users')}
-            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors ${
+            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'users'
                 ? 'border-primary-600 text-primary-600'
                 : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -457,6 +469,11 @@ function AdminDashboard() {
           </button>
         </div>
       </div>
+
+      {/* Analytics Tab */}
+      {activeTab === 'analytics' && (
+        <Analytics />
+      )}
 
       {/* Tutorials Tab */}
       {activeTab === 'tutorials' && (

@@ -7,7 +7,7 @@ function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login, loginWithGoogle, isAdmin } = useAuth();
+  const { login, loginWithGoogle, refreshUserRole } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -16,21 +16,9 @@ function Login() {
     try {
       setError('');
       setLoading(true);
-      const result = await login(email, password);
-      
-      // Check if this email is an admin email
-      const ADMIN_EMAILS = [
-        'pathikritsan80@gmail.com',
-        'paramitacoursera123@gmail.com'
-      ];
-      
-      const isAdminEmail = ADMIN_EMAILS.includes(email.toLowerCase());
-      
-      if (isAdminEmail) {
-        navigate('/admin');
-      } else {
-        navigate('/tutorials');
-      }
+      await login(email, password);
+      const isAdmin = await refreshUserRole();
+      navigate(isAdmin ? '/admin' : '/tutorials');
     } catch (error) {
       setError('Failed to log in. Please check your credentials.');
       console.error(error);
@@ -44,8 +32,8 @@ function Login() {
       setError('');
       setLoading(true);
       await loginWithGoogle();
-      // Redirect to admin portal after successful OAuth
-      navigate('/admin');
+      const isAdmin = await refreshUserRole();
+      navigate(isAdmin ? '/admin' : '/tutorials');
     } catch (error) {
       if (error.code === 'auth/popup-closed-by-user') {
         setError('Sign in cancelled.');

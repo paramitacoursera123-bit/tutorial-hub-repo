@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, updateDoc, doc, query, orderBy } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { promoteUserToAdmin, demoteAdminToUser } from '../utils/firebaseHelpers';
+import { useAuth } from '../contexts/AuthContext';
 import { Users, Shield, User, Trash2, Save } from 'lucide-react';
 
 function UserManagement() {
@@ -11,6 +14,8 @@ function UserManagement() {
   const [editingUserId, setEditingUserId] = useState(null);
   const [editingRole, setEditingRole] = useState('');
   const [saving, setSaving] = useState(false);
+  const { currentUser, refreshUserRole } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchAllUsers();
@@ -56,38 +61,27 @@ function UserManagement() {
     try {
       setSaving(true);
       setError('');
+      const newRole = editingRole;
+      let roleChanged = false;
 
-      if (userType === 'user') {
-        // Moving from user to admin - add to adminUsers
-        if (editingRole === 'admin') {
-          const userDoc = users.find(u => u.id === userId);
-          await updateDoc(doc(db, 'adminUsers', userId), {
-            uid: userId,
-            email: userDoc.email,
-            displayName: userDoc.displayName,
-            role: 'admin',
-            createdAt: userDoc.createdAt,
-            lastLogin: new Date(),
-            promotedAt: new Date()
-          });
-        }
-      } else if (userType === 'admin') {
-        // Moving from admin to user - add to users
-        if (editingRole === 'user') {
-          const adminDoc = adminUsers.find(a => a.id === userId);
-          await updateDoc(doc(db, 'users', userId), {
-            uid: userId,
-            email: adminDoc.email,
-            displayName: adminDoc.displayName,
-            role: 'user',
-            createdAt: adminDoc.createdAt,
-            demotedAt: new Date()
-          });
-        }
+      if (userType === 'user' && newRole === 'admin') {
+        roleChanged = true;
+        const userDoc = users.find(u => u.id === userId);
+        await promoteUserToAdmin(userId, userDoc.email, userDoc.displayName);
+      } else if (userType === 'admin' && newRole === 'user') {
+        roleChanged = true;
+        const adminDoc = adminUsers.find(a => a.id === userId);
+        await demoteAdminToUser(userId, adminDoc.email, adminDoc.displayName);
       }
 
       setEditingUserId(null);
       setEditingRole('');
+
+      if (roleChanged && currentUser?.uid === userId) {
+        await refreshUserRole();
+        navigate('/tutorials');
+      }
+
       await fetchAllUsers();
     } catch (err) {
       console.error('Error updating role:', err);
