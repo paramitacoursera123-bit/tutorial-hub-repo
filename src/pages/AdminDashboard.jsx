@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Eye, Upload, Save, Users, BookOpen, BarChart3 } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Upload, Save, Users, BookOpen, BarChart3, Check, X } from 'lucide-react';
 import UserManagement from '../components/UserManagement';
 import Analytics from '../components/Analytics';
 import { createTutorial, updateTutorial, deleteTutorial, getAllTutorials } from '../utils/firebaseHelpers';
@@ -51,6 +51,7 @@ function App() {
 - Explore [state and lifecycle](https://reactjs.org/docs/state-and-lifecycle.html)
 `,
     category: "React",
+    status: 'published',
     readTime: 15,
     isPremium: false,
     authorName: "Tutorial Platform Team",
@@ -157,6 +158,7 @@ console.log(add(5, 3)); // 8
 \`\`\`
 `,
     category: "JavaScript",
+    status: 'published',
     readTime: 20,
     isPremium: false,
     authorName: "Tutorial Platform Team",
@@ -169,6 +171,7 @@ console.log(add(5, 3)); // 8
     id: '3',
     title: "CSS Grid Layout Complete Guide",
     description: "Learn CSS Grid layout system for creating complex, responsive web layouts with ease.",
+    status: 'draft',
     content: `# CSS Grid Layout Complete Guide
 
 CSS Grid Layout is a two-dimensional layout method for the web. It lets you lay content out in rows and columns.
@@ -302,10 +305,23 @@ function AdminDashboard() {
   });
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [publishingId, setPublishingId] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     fetchTutorials();
   }, []);
+
+  // Auto-clear success message after 3 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage('');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const fetchTutorials = async () => {
     // Load from localStorage first, then fall back to sample data
@@ -453,6 +469,8 @@ function AdminDashboard() {
     setThumbnailFile(null);
     setEditingTutorial(null);
     setShowForm(false);
+    setError('');
+    setSuccessMessage('');
   };
 
   const addSection = () => {
@@ -542,6 +560,32 @@ function AdminDashboard() {
               {showForm ? 'Cancel' : 'Add Tutorial'}
             </button>
           </div>
+
+          {/* Error Message Display */}
+          {error && (
+            <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-800 dark:text-red-200 px-4 py-3 rounded-md flex justify-between items-center">
+              <span>{error}</span>
+              <button
+                onClick={() => setError('')}
+                className="text-red-600 dark:text-red-300 font-bold text-xl hover:text-red-800 dark:hover:text-red-100"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {/* Success Message Display */}
+          {successMessage && (
+            <div className="bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-700 text-green-800 dark:text-green-200 px-4 py-3 rounded-md flex justify-between items-center">
+              <span>{successMessage}</span>
+              <button
+                onClick={() => setSuccessMessage('')}
+                className="text-green-600 dark:text-green-300 font-bold text-xl hover:text-green-800 dark:hover:text-green-100"
+              >
+                ×
+              </button>
+            </div>
+          )}
 
           {showForm && (
             <div className="card">
@@ -767,27 +811,132 @@ function AdminDashboard() {
           <div className="space-y-4">
             {tutorials.map(tutorial => (
               <div
-                className="tutorial-tile cursor-pointer p-4 border rounded-md hover:shadow-lg transition-shadow hover:bg-gray-100 dark:hover:bg-gray-700"
-                onClick={() => {
-                  if (tutorial.id) {
-                    console.log(`Navigating to tutorial: /tutorial/${tutorial.id}`);
-                    navigate(`/tutorial/${tutorial.id}`);
-                  } else {
-                    console.error('Tutorial ID is undefined');
-                  }
-                }}
+                key={tutorial.id}
+                className="tutorial-tile p-4 border border-gray-200 dark:border-gray-700 rounded-md hover:shadow-lg transition-shadow hover:bg-gray-50 dark:hover:bg-gray-800"
               >
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                  {tutorial.title}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {tutorial.description}
-                </p>
-                {tutorial.isPremium && (
-                  <span className="inline-block bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-1 rounded mt-1">
-                    Premium
-                  </span>
-                )}
+                <div className="flex items-start justify-between gap-4">
+                  {/* Tutorial Info */}
+                  <div
+                    className="flex-1 cursor-pointer min-w-0"
+                    onClick={() => {
+                      if (tutorial.id) {
+                        console.log(`Navigating to tutorial: /tutorial/${tutorial.id}`);
+                        navigate(`/tutorial/${tutorial.id}`);
+                      } else {
+                        console.error('Tutorial ID is undefined');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 truncate">
+                        {tutorial.title}
+                      </h3>
+                      {/* Status Badge */}
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                          tutorial.status === 'published'
+                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                            : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+                        }`}
+                      >
+                        {tutorial.status === 'published' ? (
+                          <>
+                            <Check size={12} />
+                            Published
+                          </>
+                        ) : (
+                          <>
+                            <X size={12} />
+                            Draft
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
+                      {tutorial.description}
+                    </p>
+                    <div className="flex items-center gap-2 mt-3">
+                      {tutorial.isPremium && (
+                        <span className="inline-block bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-1 rounded">
+                          Premium
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {tutorial.category}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {tutorial.readTime || 5} min read
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleEdit(tutorial)}
+                      title="Edit this tutorial"
+                      className="btn-icon btn-icon-primary hover:bg-blue-100 dark:hover:bg-blue-900 p-2"
+                    >
+                      <Edit size={18} />
+                    </button>
+
+                    {tutorial.status === 'draft' && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            setPublishingId(tutorial.id);
+                            setError('');
+                            
+                            console.log('Publishing tutorial:', tutorial.id);
+                            
+                            const tutorialData = {
+                              ...tutorial,
+                              status: 'published',
+                              updatedAt: new Date().toISOString()
+                            };
+
+                            // Try to save to Firestore (will be available in public tutorials)
+                            try {
+                              await updateTutorial(tutorial.id, tutorialData);
+                              console.log('Tutorial saved to Firestore:', tutorial.id);
+                            } catch (firestoreError) {
+                              console.warn('Firestore save failed (will use localStorage):', firestoreError.message);
+                            }
+
+                            // Update local admin storage to mark as published
+                            const updatedTutorials = tutorials.map(t => 
+                              t.id === tutorial.id 
+                                ? { ...t, status: 'published', updatedAt: new Date().toISOString() } 
+                                : t
+                            );
+                            saveTutorialsToStorage(updatedTutorials);
+                            
+                            setSuccessMessage(`"${tutorial.title}" published successfully!`);
+                            console.log('Tutorial published successfully:', tutorial.id);
+                          } catch (error) {
+                            console.error('Error publishing tutorial:', error);
+                            setError(`Failed to publish tutorial: ${error.message}`);
+                          } finally {
+                            setPublishingId(null);
+                          }
+                        }}
+                        disabled={uploading || publishingId === tutorial.id}
+                        title="Publish this draft"
+                        className="btn-icon btn-icon-success hover:bg-green-100 dark:hover:bg-green-900 p-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      >
+                        <Upload size={18} />
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleDelete(tutorial.id)}
+                      title="Delete this tutorial"
+                      className="btn-icon btn-icon-danger hover:bg-red-100 dark:hover:bg-red-900 p-2"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
