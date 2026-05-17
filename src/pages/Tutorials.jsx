@@ -18,10 +18,12 @@ function Tutorials() {
     try {
       setLoading(true);
       const data = await getAllTutorials();
-      setTutorials(data);
-      
+      // Expose only published tutorials to public listing
+      const publicTutorials = data.filter(t => (t.status || 'published') !== 'draft');
+      setTutorials(publicTutorials);
+
       // Extract unique categories
-      const categorySet = new Set(data.map(t => t.category));
+      const categorySet = new Set(publicTutorials.map(t => t.category));
       setCategories(['all', ...Array.from(categorySet)]);
     } catch (error) {
       console.error('Error loading tutorials:', error);

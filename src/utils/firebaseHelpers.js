@@ -189,7 +189,8 @@ export async function createTutorial(tutorialData) {
     const newTutorial = {
       ...tutorialData,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      versions: []
     };
     const docRef = await addDoc(collection(db, 'tutorials'), newTutorial);
     return docRef.id;
@@ -203,6 +204,7 @@ export async function createTutorial(tutorialData) {
       ...tutorialData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      versions: [],
       views: 0,
       likes: 0
     };
@@ -270,6 +272,28 @@ export async function getTutorial(tutorialId) {
 export async function updateTutorial(tutorialId, updates) {
   try {
     const tutorialRef = doc(db, 'tutorials', tutorialId);
+    const currentDoc = await getDoc(tutorialRef);
+    if (currentDoc.exists()) {
+      const currentData = currentDoc.data();
+      const previousSnapshot = {
+        ...currentData,
+        versionedAt: new Date().toISOString()
+      };
+
+      const newVersions = Array.isArray(currentData.versions) ? [...currentData.versions, previousSnapshot] : [previousSnapshot];
+
+      const updatedData = {
+        ...currentData,
+        ...updates,
+        versions: newVersions,
+        updatedAt: new Date().toISOString()
+      };
+
+      // overwrite with merged data
+      await setDoc(tutorialRef, updatedData, { merge: true });
+      return;
+    }
+    // If doc doesn't exist, fall back to simple update
     await updateDoc(tutorialRef, {
       ...updates,
       updatedAt: new Date().toISOString()
@@ -281,9 +305,14 @@ export async function updateTutorial(tutorialId, updates) {
     const tutorials = getTutorialsFromStorage();
     const index = tutorials.findIndex(t => t.id === tutorialId);
     if (index !== -1) {
+      const current = tutorials[index];
+      const previousSnapshot = { ...current, versionedAt: new Date().toISOString() };
+      const newVersions = Array.isArray(current.versions) ? [...current.versions, previousSnapshot] : [previousSnapshot];
+
       tutorials[index] = {
-        ...tutorials[index],
+        ...current,
         ...updates,
+        versions: newVersions,
         updatedAt: new Date().toISOString()
       };
       saveTutorialsToStorage(tutorials);

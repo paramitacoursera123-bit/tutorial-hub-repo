@@ -293,6 +293,7 @@ function AdminDashboard() {
     description: '',
     content: '',
     category: '',
+    status: 'draft',
     readTime: 5,
     isPremium: false,
     thumbnail: '',
@@ -334,6 +335,7 @@ function AdminDashboard() {
 
       const tutorialData = {
         ...formData,
+        status: formData.status || 'draft',
         thumbnail: thumbnailFile ? URL.createObjectURL(thumbnailFile) : formData.thumbnail,
         authorName: 'Admin',
         createdAt: new Date(),
@@ -345,19 +347,69 @@ function AdminDashboard() {
         // Update existing tutorial
         updatedTutorials = tutorials.map(tutorial =>
           tutorial.id === editingTutorial.id
-            ? { ...tutorialData, id: editingTutorial.id }
+            ? (() => {
+                const prev = tutorial;
+                const prevSnapshot = { ...prev, versionedAt: new Date() };
+                const versions = Array.isArray(prev.versions) ? [...prev.versions, prevSnapshot] : [prevSnapshot];
+                return { ...tutorialData, id: editingTutorial.id, versions };
+              })()
             : tutorial
         );
       } else {
         // Add new tutorial
         const newId = Date.now().toString();
-        updatedTutorials = [...tutorials, { ...tutorialData, id: newId }];
+        updatedTutorials = [...tutorials, { ...tutorialData, id: newId, versions: [] }];
       }
 
       saveTutorialsToStorage(updatedTutorials);
       resetForm();
     } catch (error) {
       console.error('Error saving tutorial:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Publish a tutorial to the public tutorials collection/localStorage
+  const handlePublish = async () => {
+    try {
+      setUploading(true);
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const tutorialData = {
+        ...formData,
+        status: 'published',
+        thumbnail: thumbnailFile ? URL.createObjectURL(thumbnailFile) : formData.thumbnail,
+        authorName: 'Admin',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Create in public tutorials (Firestore or localStorage fallback)
+      try {
+        if (editingTutorial && editingTutorial.id) {
+          // Try to update existing public tutorial (will record versions in helpers)
+          await updateTutorial(editingTutorial.id, tutorialData);
+          console.log('Updated public tutorial id:', editingTutorial.id);
+        } else {
+          const newId = await createTutorial(tutorialData);
+          console.log('Published tutorial id:', newId);
+        }
+      } catch (err) {
+        console.error('Error publishing tutorial:', err);
+      }
+
+      // Also save/update in admin list for management
+      const newIdForAdmin = editingTutorial ? editingTutorial.id : Date.now().toString();
+      const updatedTutorials = editingTutorial
+        ? tutorials.map(t => t.id === editingTutorial.id ? { ...tutorialData, id: editingTutorial.id, createdAt: new Date() } : t)
+        : [...tutorials, { ...tutorialData, id: newIdForAdmin }];
+
+      saveTutorialsToStorage(updatedTutorials);
+      resetForm();
+    } catch (error) {
+      console.error('Error publishing tutorial:', error);
     } finally {
       setUploading(false);
     }
@@ -673,15 +725,28 @@ function AdminDashboard() {
               <button
                 type="submit"
                 disabled={uploading}
-                className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                title="Save as Draft"
               >
                 <Save size={18} />
-                {uploading ? 'Saving...' : (editingTutorial ? 'Update Tutorial' : 'Create Tutorial')}
+                {uploading ? 'Saving...' : (editingTutorial ? 'Save Draft' : 'Save as Draft')}
               </button>
+
+              <button
+                type="button"
+                onClick={handlePublish}
+                disabled={uploading}
+                className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                title="Publish tutorial"
+              >
+                <Upload size={18} />
+                {uploading ? 'Publishing...' : (editingTutorial ? 'Publish Update' : 'Publish')}
+              </button>
+
               <button
                 type="button"
                 onClick={resetForm}
-                className="btn btn-secondary"
+                className="btn btn-neutral"
               >
                 Cancel
               </button>
