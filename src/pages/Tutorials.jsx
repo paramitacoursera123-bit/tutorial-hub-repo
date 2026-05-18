@@ -116,11 +116,9 @@ function Tutorials() {
                   <span className="text-sm text-primary-600 dark:text-primary-400 font-medium">
                     {tutorial.category}
                   </span>
-                  {tutorial.isPremium && (
-                    <span className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-1 rounded">
-                      Premium
-                    </span>
-                  )}
+                  <span className={`text-xs px-2 py-1 rounded ${tutorial.isPremium ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'}`}>
+                    {tutorial.isPremium ? 'Premium' : 'FREE'}
+                  </span>
                 </div>
                 
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">

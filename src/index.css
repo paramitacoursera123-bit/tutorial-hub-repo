@@ -73,6 +73,14 @@
     @apply bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 shadow-lg hover:shadow-xl;
   }
 
+  .btn-neutral {
+    @apply bg-gradient-to-r from-gray-400 to-gray-500 text-white hover:from-gray-500 hover:to-gray-600 focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 shadow-md hover:shadow-lg;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1 text-sm rounded-md font-medium transition-all duration-200 transform hover:scale-105 active:scale-95;
+  }
+
   .btn-icon {
     @apply p-3 rounded-lg transition-all duration-200 transform hover:scale-110 active:scale-95 shadow-md hover:shadow-lg;
   }

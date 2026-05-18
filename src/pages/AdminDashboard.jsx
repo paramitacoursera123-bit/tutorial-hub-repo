@@ -394,6 +394,7 @@ function AdminDashboard() {
 
       await new Promise(resolve => setTimeout(resolve, 1000));
 
+      const publishId = editingTutorial?.id || Date.now().toString();
       const tutorialData = {
         ...formData,
         status: 'published',
@@ -401,30 +402,23 @@ function AdminDashboard() {
         authorName: 'Admin',
         createdAt: editingTutorial?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        versions: editingTutorial?.versions || []
+        versions: editingTutorial?.versions || [],
+        id: publishId
       };
 
       // Create/update in public tutorials (Firestore or localStorage fallback)
       try {
-        if (editingTutorial && editingTutorial.id) {
-          // Try to create/update with same ID to maintain consistency
-          const publishedId = await createTutorial(tutorialData, editingTutorial.id);
-          console.log('Published tutorial id:', publishedId);
-        } else {
-          // New tutorial, create it (will generate new ID)
-          const newId = await createTutorial(tutorialData);
-          console.log('Published tutorial id:', newId);
-        }
+        const publishedId = await createTutorial(tutorialData, publishId);
+        console.log('Published tutorial id:', publishedId);
       } catch (err) {
         console.error('Error publishing tutorial:', err);
         throw err;
       }
 
-      // Also save/update in admin list for management
-      const newIdForAdmin = editingTutorial ? editingTutorial.id : Date.now().toString();
+      // Keep admin storage in sync with the published tutorial ID
       const updatedTutorials = editingTutorial
-        ? tutorials.map(t => t.id === editingTutorial.id ? { ...tutorialData, id: editingTutorial.id, createdAt: new Date() } : t)
-        : [...tutorials, { ...tutorialData, id: newIdForAdmin }];
+        ? tutorials.map(t => t.id === editingTutorial.id ? { ...t, ...tutorialData, id: publishId } : t)
+        : [...tutorials, { ...tutorialData, id: publishId, versions: [] }];
 
       saveTutorialsToStorage(updatedTutorials);
       setSuccessMessage('Tutorial published successfully!');
