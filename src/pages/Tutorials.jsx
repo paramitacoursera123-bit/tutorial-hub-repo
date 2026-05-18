@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, Filter, Clock, User } from 'lucide-react';
-import { getAllTutorials, searchTutorials } from '../utils/firebaseHelpers';
+import { useAuth } from '../contexts/AuthContext';
+import { getAllTutorials } from '../utils/firebaseHelpers';
 
 function Tutorials() {
   const [tutorials, setTutorials] = useState([]);
@@ -10,6 +11,8 @@ function Tutorials() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState([]);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     fetchTutorialsFromFirestore();
@@ -39,6 +42,22 @@ function Tutorials() {
     const matchesCategory = selectedCategory === 'all' || tutorial.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  const getPriceLabel = (tutorial) => {
+    if (tutorial.price !== undefined && tutorial.price !== null) {
+      return `$${Number(tutorial.price).toFixed(2)}`;
+    }
+    return '$9.99';
+  };
+
+  const handleTutorialClick = (tutorial) => {
+    if (tutorial.isPremium && !currentUser) {
+      navigate('/login');
+      return;
+    }
+
+    navigate(`/tutorial/${tutorial.id}`);
+  };
 
   if (loading) {
     return (
@@ -97,51 +116,72 @@ function Tutorials() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTutorials.map(tutorial => (
-            <Link
-              key={tutorial.id}
-              to={`/tutorial/${tutorial.id}`}
-              className="card hover:shadow-lg transition-shadow duration-200"
-            >
-              {tutorial.thumbnail && (
-                <img
-                  src={tutorial.thumbnail}
-                  alt={tutorial.title}
-                  className="w-full h-48 object-cover rounded-t-lg"
-                />
-              )}
-              
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-primary-600 dark:text-primary-400 font-medium">
-                    {tutorial.category}
-                  </span>
-                  <span className={`text-xs px-2 py-1 rounded ${tutorial.isPremium ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'}`}>
-                    {tutorial.isPremium ? 'Premium' : 'FREE'}
-                  </span>
-                </div>
+          {filteredTutorials.map(tutorial => {
+            const priceLabel = getPriceLabel(tutorial);
+            const isLocked = tutorial.isPremium && !currentUser;
+            const cardClass = `card transition-shadow duration-200 ${isLocked ? 'hover:shadow-md cursor-pointer' : 'hover:shadow-lg'}`;
+
+            return (
+              <button
+                key={tutorial.id}
+                type="button"
+                onClick={() => handleTutorialClick(tutorial)}
+                className={cardClass}
+              >
+                {tutorial.thumbnail && (
+                  <img
+                    src={tutorial.thumbnail}
+                    alt={tutorial.title}
+                    className="w-full h-48 object-cover rounded-t-lg"
+                  />
+                )}
                 
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  {tutorial.title}
-                </h3>
-                
-                <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
-                  {tutorial.description}
-                </p>
-                
-                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                  <div className="flex items-center">
-                    <User size={16} className="mr-1" />
-                    {tutorial.authorName}
+                <div className="p-6 text-left">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-primary-600 dark:text-primary-400 font-medium">
+                      {tutorial.category}
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded ${tutorial.isPremium ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'}`}>
+                      {tutorial.isPremium ? 'Premium' : 'FREE'}
+                    </span>
                   </div>
-                  <div className="flex items-center">
-                    <Clock size={16} className="mr-1" />
-                    {tutorial.readTime} min read
+                  
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    {tutorial.title}
+                  </h3>
+                  
+                  <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
+                    {tutorial.description}
+                  </p>
+
+                  {tutorial.isPremium && (
+                    <div className="mb-4 rounded-lg bg-yellow-50 dark:bg-yellow-900 p-3 text-sm text-yellow-800 dark:text-yellow-200">
+                      <span className="font-semibold">{priceLabel}</span> — Premium content requires purchase.
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center">
+                      <User size={16} className="mr-1" />
+                      {tutorial.authorName}
+                    </div>
+                    <div className="flex items-center">
+                      <Clock size={16} className="mr-1" />
+                      {tutorial.readTime} min read
+                    </div>
                   </div>
+
+                  {tutorial.isPremium && (
+                    <div className="mt-4 text-sm font-medium text-primary-700 dark:text-primary-200">
+                      {isLocked
+                        ? 'Login to view and purchase premium access.'
+                        : 'Click to view purchase options and unlock this tutorial.'}
+                    </div>
+                  )}
                 </div>
-              </div>
-            </Link>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
