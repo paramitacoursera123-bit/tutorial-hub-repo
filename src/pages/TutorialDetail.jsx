@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -90,6 +90,7 @@ function TutorialDetail() {
   const [commentError, setCommentError] = useState('');
   const [commentSuccess, setCommentSuccess] = useState('');
   const [showFreeSignupPrompt, setShowFreeSignupPrompt] = useState(false);
+  const initialSectionMarked = useRef(false);
 
   useEffect(() => {
     fetchTutorial();
@@ -103,6 +104,19 @@ function TutorialDetail() {
       fetchComments();
     }
   }, [tutorial, currentUser]);
+
+  useEffect(() => {
+    if (!tutorial || !tutorial.sections?.length) return;
+    if (initialSectionMarked.current) return;
+    if (!canAccessFreeSection(currentSection)) return;
+    if (completedSections.includes(currentSection)) {
+      initialSectionMarked.current = true;
+      return;
+    }
+
+    updateProgress(currentSection);
+    initialSectionMarked.current = true;
+  }, [tutorial, currentUser, currentSection, completedSections]);
 
   // Auto-clear success message
   useEffect(() => {
