@@ -241,87 +241,6 @@ function TutorialDetail() {
     }
   };
 
-  const markSectionAsCompleted = async (sectionIndex) => {
-    if (tutorial?.isPremium && !currentUser) return;
-    
-    try {
-      // Update state immediately
-      const newCompletedSections = [...completedSections];
-      if (!newCompletedSections.includes(sectionIndex)) {
-        newCompletedSections.push(sectionIndex);
-      }
-      setCompletedSections(newCompletedSections);
-
-      const totalSections = tutorial?.sections?.length || 1;
-      const percentage = calculateProgressPercentage(newCompletedSections.length, totalSections);
-      setProgressPercentage(percentage);
-
-      const progressData = {
-        tutorialId: id,
-        userId: currentUser?.uid || 'guest',
-        currentSection: currentSection,
-        completedSections: newCompletedSections,
-        completed: percentage === 100,
-        completedAt: percentage === 100 ? new Date().toISOString() : null,
-        lastAccessed: new Date().toISOString()
-      };
-
-      // Try Firestore first
-      if (currentUser) {
-        try {
-          const progressRef = doc(db, 'progress', `${currentUser.uid}_${id}`);
-          await updateDoc(progressRef, progressData);
-          console.log('✅ Section completion saved to Firestore');
-        } catch (firestoreError) {
-          console.warn('⚠️ Firestore unavailable, using localStorage:', firestoreError.message);
-        }
-      }
-
-      // Always save to localStorage
-      saveProgressToStorage(progressData);
-      console.log('✅ Section completion saved to localStorage');
-    } catch (error) {
-      console.error('Error marking section as completed:', error);
-    }
-  };
-
-  const markAsCompleted = async () => {
-    if (!currentUser) return;
-    
-    try {
-      const totalSections = tutorial?.sections?.length || 1;
-      const allSections = Array.from({ length: totalSections }, (_, i) => i);
-      
-      const progressData = {
-        tutorialId: id,
-        userId: currentUser.uid,
-        currentSection: totalSections - 1,
-        completedSections: allSections,
-        completed: true,
-        completedAt: new Date().toISOString(),
-        lastAccessed: new Date().toISOString()
-      };
-
-      // Try Firestore first
-      try {
-        const progressRef = doc(db, 'progress', `${currentUser.uid}_${id}`);
-        await updateDoc(progressRef, progressData);
-        console.log('✅ Tutorial marked as completed in Firestore');
-      } catch (firestoreError) {
-        console.warn('⚠️ Firestore unavailable, using localStorage:', firestoreError.message);
-      }
-
-      // Always save to localStorage
-      saveProgressToStorage(progressData);
-      
-      setCompleted(true);
-      setCompletedSections(allSections);
-      setProgressPercentage(100);
-      console.log('✅ Tutorial marked as completed in localStorage');
-    } catch (error) {
-      console.error('Error marking tutorial as completed:', error);
-    }
-  };
 
   const updateProgress = async (sectionIndex) => {
     if (tutorial?.isPremium && !currentUser) {
@@ -335,13 +254,23 @@ function TutorialDetail() {
 
     try {
       setCurrentSection(sectionIndex);
-      
+
+      const newCompletedSections = [...completedSections];
+      if (!newCompletedSections.includes(sectionIndex)) {
+        newCompletedSections.push(sectionIndex);
+      }
+      setCompletedSections(newCompletedSections);
+
+      const totalSections = tutorial?.sections?.length || 1;
+      const percentage = calculateProgressPercentage(newCompletedSections.length, totalSections);
+      setProgressPercentage(percentage);
+
       const progressData = {
         tutorialId: id,
         userId: currentUser?.uid || 'guest',
         currentSection: sectionIndex,
-        completedSections: completedSections,
-        completed: false,
+        completedSections: newCompletedSections,
+        completed: currentUser ? percentage === 100 : false,
         lastAccessed: new Date().toISOString()
       };
 
@@ -710,16 +639,6 @@ function TutorialDetail() {
             </div>
           </div>
           
-          {currentUser && (
-            <button
-              onClick={markAsCompleted}
-              disabled={completed}
-              className={`btn ${completed ? 'btn-secondary' : 'btn-primary'} flex items-center`}
-            >
-              <CheckCircle size={16} className="mr-2" />
-              {completed ? 'Completed' : 'Mark as Completed'}
-            </button>
-          )}
         </div>
       </div>
 
@@ -843,18 +762,6 @@ function TutorialDetail() {
               </button>
             </div>
 
-            {currentUser && (
-              <div className="flex justify-center">
-                <button
-                  onClick={() => markSectionAsCompleted(currentSection)}
-                  disabled={completedSections.includes(currentSection)}
-                  className={`btn text-sm ${completedSections.includes(currentSection) ? 'btn-secondary opacity-50' : 'btn-success'} flex items-center gap-2`}
-                >
-                  <CheckCircle size={16} />
-                  {completedSections.includes(currentSection) ? 'Section Completed' : 'Mark Section as Complete'}
-                </button>
-              </div>
-            )}
           </div>
 
           <div className="card">
