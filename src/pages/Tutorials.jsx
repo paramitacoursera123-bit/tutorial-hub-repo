@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Filter, Clock, User } from 'lucide-react';
+import { Search, Filter, Clock, User, Eye } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getAllTutorials } from '../utils/firebaseHelpers';
 
@@ -160,14 +160,18 @@ function Tutorials() {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                    <div className="flex items-center">
-                      <User size={16} className="mr-1" />
-                      {tutorial.authorName}
-                    </div>
-                    <div className="flex items-center">
-                      <Clock size={16} className="mr-1" />
-                      {tutorial.readTime} min read
+<div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center">
+                    <User size={16} className="mr-1" />
+                    {tutorial.authorName}
+                  </div>
+                  <div className="flex items-center">
+                    <Clock size={16} className="mr-1" />
+                    {tutorial.readTime} min read
+                  </div>
+                  <div className="flex items-center">
+                    <Eye size={16} className="mr-1" />
+                    {(tutorial.views || 0).toLocaleString()} views
                     </div>
                   </div>
 

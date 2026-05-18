@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
+import { incrementTutorialViews } from '../utils/firebaseHelpers';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -20,7 +21,8 @@ import {
   ArrowLeft,
   Reply,
   Trash2,
-  Send
+  Send,
+  Eye
 } from 'lucide-react';
 
 // Sample tutorials data (fallback when Firestore is not available)
@@ -155,7 +157,9 @@ function TutorialDetail() {
       const docSnap = await getDoc(docRef);
 
       if (docSnap.exists()) {
-        setTutorial({ id: docSnap.id, ...docSnap.data() });
+        const tutorialData = { id: docSnap.id, ...docSnap.data() };
+        setTutorial(tutorialData);
+        await incrementTutorialViews(docSnap.id);
       } else {
         navigate('/tutorials');
       }
@@ -691,7 +695,7 @@ function TutorialDetail() {
         )}
         
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+          <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
             <div className="flex items-center">
               <User size={16} className="mr-1" />
               {tutorial.authorName}
@@ -699,6 +703,10 @@ function TutorialDetail() {
             <div className="flex items-center">
               <Clock size={16} className="mr-1" />
               {tutorial.readTime} min read
+            </div>
+            <div className="flex items-center">
+              <Eye size={16} className="mr-1" />
+              {(tutorial.views || 0).toLocaleString()} views
             </div>
           </div>
           
