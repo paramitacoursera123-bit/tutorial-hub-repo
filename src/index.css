@@ -7,6 +7,26 @@
     font-family: 'Inter', system-ui, sans-serif;
     scroll-behavior: smooth;
   }
+
+  body {
+    background-color: #ffffff;
+    color: #111827;
+    min-height: 100vh;
+  }
+
+  html.dark body {
+    background-color: #020617;
+    color: #f8fafc;
+  }
+
+  body, input, textarea, select, button {
+    @apply font-sans;
+  }
+
+  .prose,
+  .prose * {
+    color: inherit !important;
+  }
 }
 
 @keyframes fadeInUp {

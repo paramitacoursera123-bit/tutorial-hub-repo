@@ -51,8 +51,17 @@ function Tutorials() {
   };
 
   const handleTutorialClick = (tutorial) => {
-    if (tutorial.isPremium && !currentUser) {
-      navigate('/login');
+    if (tutorial.isPremium) {
+      if (!currentUser) {
+        navigate('/login', {
+          state: {
+            next: '/cart',
+            nextState: { tutorial }
+          }
+        });
+        return;
+      }
+      navigate('/cart', { state: { tutorial } });
       return;
     }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -90,7 +90,6 @@ function TutorialDetail() {
   const [commentError, setCommentError] = useState('');
   const [commentSuccess, setCommentSuccess] = useState('');
   const [showFreeSignupPrompt, setShowFreeSignupPrompt] = useState(false);
-  const initialSectionMarked = useRef(false);
 
   useEffect(() => {
     fetchTutorial();
@@ -104,19 +103,6 @@ function TutorialDetail() {
       fetchComments();
     }
   }, [tutorial, currentUser]);
-
-  useEffect(() => {
-    if (!tutorial || !tutorial.sections?.length) return;
-    if (initialSectionMarked.current) return;
-    if (!canAccessFreeSection(currentSection)) return;
-    if (completedSections.includes(currentSection)) {
-      initialSectionMarked.current = true;
-      return;
-    }
-
-    updateProgress(currentSection);
-    initialSectionMarked.current = true;
-  }, [tutorial, currentUser, currentSection, completedSections]);
 
   // Auto-clear success message
   useEffect(() => {
@@ -138,6 +124,22 @@ function TutorialDetail() {
   const freeSectionLimitIndex = tutorial?.sections
     ? Math.max(0, Math.ceil(tutorial.sections.length * 0.35) - 1)
     : 0;
+
+  const handlePurchase = () => {
+    if (!tutorial) return;
+    if (!currentUser) {
+      navigate('/login', {
+        state: {
+          next: '/cart',
+          nextState: { tutorial }
+        }
+      });
+      return;
+    }
+
+    navigate('/cart', { state: { tutorial } });
+  };
+
   const canAccessFreeSection = (sectionIndex) => {
     if (currentUser) return true;
     if (tutorial?.isPremium) return false;
@@ -256,7 +258,35 @@ function TutorialDetail() {
   };
 
 
-  const updateProgress = async (sectionIndex) => {
+  const saveProgress = async (sectionIndex, completedSectionsList) => {
+    const totalSections = tutorial?.sections?.length || 1;
+    const percentage = calculateProgressPercentage(completedSectionsList.length, totalSections);
+    setCurrentSection(sectionIndex);
+    setCompletedSections(completedSectionsList);
+    setProgressPercentage(percentage);
+
+    const progressData = {
+      tutorialId: id,
+      userId: currentUser?.uid || 'guest',
+      currentSection: sectionIndex,
+      completedSections: completedSectionsList,
+      completed: currentUser ? percentage === 100 : false,
+      lastAccessed: new Date().toISOString()
+    };
+
+    if (currentUser) {
+      try {
+        const progressRef = doc(db, 'progress', `${currentUser.uid}_${id}`);
+        await updateDoc(progressRef, progressData);
+      } catch (firestoreError) {
+        console.warn('⚠️ Firestore unavailable for section update, using localStorage');
+      }
+    }
+
+    saveProgressToStorage(progressData);
+  };
+
+  const updateProgress = async (sectionIndex, completedSectionsList = completedSections) => {
     if (tutorial?.isPremium && !currentUser) {
       return;
     }
@@ -266,43 +296,15 @@ function TutorialDetail() {
       return;
     }
 
-    try {
-      setCurrentSection(sectionIndex);
+    await saveProgress(sectionIndex, completedSectionsList);
+  };
 
-      const newCompletedSections = [...completedSections];
-      if (!newCompletedSections.includes(sectionIndex)) {
-        newCompletedSections.push(sectionIndex);
-      }
-      setCompletedSections(newCompletedSections);
+  const completeCurrentSection = async () => {
+    if (!tutorial) return;
+    if (completedSections.includes(currentSection)) return;
 
-      const totalSections = tutorial?.sections?.length || 1;
-      const percentage = calculateProgressPercentage(newCompletedSections.length, totalSections);
-      setProgressPercentage(percentage);
-
-      const progressData = {
-        tutorialId: id,
-        userId: currentUser?.uid || 'guest',
-        currentSection: sectionIndex,
-        completedSections: newCompletedSections,
-        completed: currentUser ? percentage === 100 : false,
-        lastAccessed: new Date().toISOString()
-      };
-
-      // Try Firestore first
-      if (currentUser) {
-        try {
-          const progressRef = doc(db, 'progress', `${currentUser.uid}_${id}`);
-          await updateDoc(progressRef, progressData);
-        } catch (firestoreError) {
-          console.warn('⚠️ Firestore unavailable for section update, using localStorage');
-        }
-      }
-
-      // Always save to localStorage
-      saveProgressToStorage(progressData);
-    } catch (error) {
-      console.error('Error updating progress:', error);
-    }
+    const nextCompletedSections = [...completedSections, currentSection];
+    await saveProgress(currentSection, nextCompletedSections);
   };
 
   const handleSectionChange = (sectionIndex) => {
@@ -315,7 +317,12 @@ function TutorialDetail() {
       return;
     }
 
-    updateProgress(sectionIndex);
+    let nextCompletedSections = completedSections;
+    if (sectionIndex !== currentSection && !completedSections.includes(currentSection)) {
+      nextCompletedSections = [...completedSections, currentSection];
+    }
+
+    updateProgress(sectionIndex, nextCompletedSections);
   };
 
   const addComment = async () => {
@@ -590,7 +597,7 @@ function TutorialDetail() {
       {/* Header */}
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <span className="text-sm text-primary-600 dark:text-primary-400 font-medium">
+          <span className="text-sm text-primary-600 dark:text-gray-100 font-medium">
             {tutorial.category}
           </span>
           <span className={`text-xs px-2 py-1 rounded ${tutorial.isPremium ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'}`}>
@@ -654,6 +661,24 @@ function TutorialDetail() {
           </div>
           
         </div>
+
+        {tutorial.isPremium && (
+          <div className="mt-6 flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={handlePurchase}
+              className="btn btn-primary w-full sm:w-auto"
+            >
+              {currentUser ? 'Continue to Checkout' : 'Login to Purchase'}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/tutorials')}
+              className="btn btn-secondary w-full sm:w-auto"
+            >
+              Browse other tutorials
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Premium login prompt */}
@@ -673,7 +698,7 @@ function TutorialDetail() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <button
-                onClick={() => navigate('/login')}
+                onClick={handlePurchase}
                 className="btn btn-primary px-6 py-3 w-full sm:w-auto"
               >
                 Login / Buy Course
@@ -727,12 +752,12 @@ function TutorialDetail() {
                     disabled={locked || (tutorial.isPremium && !currentUser)}
                     className={`w-full text-left p-3 rounded-lg transition-all border ${
                       index === currentSection
-                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900 text-primary-900 dark:text-primary-100'
+                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900 text-gray-900 dark:text-gray-100'
                         : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 hover:border-primary-300'
                     } ${locked ? 'opacity-60 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold truncate">{section.title || `Section ${index + 1}`}</span>
+                      <span className="text-sm font-semibold truncate text-gray-900 dark:text-gray-100">{section.title || `Section ${index + 1}`}</span>
                       {completedSections.includes(index) && (
                         <span className="text-xs text-green-700 dark:text-green-200 bg-green-100 dark:bg-green-900 px-2 py-1 rounded-full">
                           Done
@@ -837,6 +862,29 @@ function TutorialDetail() {
                     </div>
                   </div>
                 )}
+
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={completeCurrentSection}
+                    disabled={completedSections.includes(currentSection)}
+                    className="btn btn-primary"
+                  >
+                    {completedSections.includes(currentSection)
+                      ? 'Section Completed'
+                      : currentSection === (tutorial.sections?.length || 1) - 1
+                      ? 'Finish Tutorial'
+                      : 'Mark Section Complete'}
+                  </button>
+                  {completedSections.includes(currentSection) ? (
+                    <span className="text-sm text-green-700 dark:text-green-200">
+                      This section is already marked complete.
+                    </span>
+                  ) : currentSection === (tutorial.sections?.length || 1) - 1 ? (
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                      Click to mark the final section as complete and finish the tutorial.
+                    </span>
+                  ) : null}
+                </div>
               </div>
             ) : (
               <div className="prose dark:prose-invert max-w-none text-gray-900 dark:text-gray-100">

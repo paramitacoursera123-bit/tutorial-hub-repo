@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 function Login() {
@@ -9,6 +9,18 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const { login, loginWithGoogle, refreshUserRole } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const nextPath = location.state?.next;
+  const nextState = location.state?.nextState;
+
+  const redirectAfterLogin = (isAdmin) => {
+    if (nextPath) {
+      navigate(nextPath, { state: nextState });
+      return;
+    }
+    navigate(isAdmin ? '/admin' : '/tutorials');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,7 +30,7 @@ function Login() {
       setLoading(true);
       await login(email, password);
       const isAdmin = await refreshUserRole();
-      navigate(isAdmin ? '/admin' : '/tutorials');
+      redirectAfterLogin(isAdmin);
     } catch (error) {
       setError('Failed to log in. Please check your credentials.');
       console.error(error);
@@ -33,7 +45,7 @@ function Login() {
       setLoading(true);
       await loginWithGoogle();
       const isAdmin = await refreshUserRole();
-      navigate(isAdmin ? '/admin' : '/tutorials');
+      redirectAfterLogin(isAdmin);
     } catch (error) {
       if (error.code === 'auth/popup-closed-by-user') {
         setError('Sign in cancelled.');
