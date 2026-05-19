@@ -27,7 +27,7 @@ A fully dynamic, production-ready technical tutorial platform built with React, 
 
 ## 📋 Prerequisites
 
-Before you begin, ensure you have:
+Before you begin, ensure you have :
 - Node.js (v16 or higher)
 - npm or yarn
 - A Firebase account
