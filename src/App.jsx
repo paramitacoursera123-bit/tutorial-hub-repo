@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
+import MyLearning from './pages/MyLearning';
 import ProtectedRoute from './components/ProtectedRoute';
 import './debug'; // Debug helper for console access
 import './App.css';
@@ -36,6 +37,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <Profile />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/learning" 
+                  element={
+                    <ProtectedRoute>
+                      <MyLearning />
                     </ProtectedRoute>
                   } 
                 />

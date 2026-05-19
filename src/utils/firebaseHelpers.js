@@ -559,14 +559,74 @@ export async function getLatestTutorials(limit = 5) {
 }
 
 /**
+ * Determine the user document reference for saved tutorial operations.
+ */
+function getUserDocRef(userId, userRole = 'user') {
+  const collectionName = userRole === 'admin' ? 'adminUsers' : 'users';
+  return doc(db, collectionName, userId);
+}
+
+function getSavedTutorialsStorageKey(userId) {
+  return `savedTutorials_${userId || 'guest'}`;
+}
+
+function getSavedTutorialIdsFromStorage(userId) {
+  try {
+    const stored = localStorage.getItem(getSavedTutorialsStorageKey(userId));
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Error reading saved tutorials from localStorage:', error);
+    return [];
+  }
+}
+
+function saveSavedTutorialIdsToStorage(userId, ids) {
+  try {
+    localStorage.setItem(getSavedTutorialsStorageKey(userId), JSON.stringify(ids));
+  } catch (error) {
+    console.error('Error saving saved tutorials to localStorage:', error);
+  }
+}
+
+/**
+ * Get user's saved tutorial IDs
+ */
+export async function getUserSavedTutorialIds(userId, userRole = 'user') {
+  if (!userId) {
+    return getSavedTutorialIdsFromStorage('guest');
+  }
+
+  try {
+    const userRef = getUserDocRef(userId, userRole);
+    const userDoc = await getDoc(userRef);
+    if (userDoc.exists()) {
+      return userDoc.data()?.savedTutorials || [];
+    }
+  } catch (error) {
+    console.warn('Error reading saved tutorial ids from Firestore, using localStorage:', error);
+  }
+
+  return getSavedTutorialIdsFromStorage(userId);
+}
+
+/**
  * Add tutorial to user's saved list
  */
-export async function saveTutorialToUser(userId, tutorialId) {
+export async function saveTutorialToUser(userId, tutorialId, userRole = 'user') {
+  if (!userId) {
+    const savedIds = getSavedTutorialIdsFromStorage('guest');
+    if (!savedIds.includes(tutorialId)) {
+      const nextIds = [...savedIds, tutorialId];
+      saveSavedTutorialIdsToStorage('guest', nextIds);
+    }
+    return;
+  }
+
   try {
-    const userRef = doc(db, 'adminUsers', userId);
+    const userRef = getUserDocRef(userId, userRole);
     const userDoc = await getDoc(userRef);
     const savedTutorials = userDoc.data()?.savedTutorials || [];
-    
+
     if (!savedTutorials.includes(tutorialId)) {
       await updateDoc(userRef, {
         savedTutorials: [...savedTutorials, tutorialId],
@@ -574,39 +634,46 @@ export async function saveTutorialToUser(userId, tutorialId) {
       });
     }
   } catch (error) {
-    console.error('Error saving tutorial:', error);
-    throw error;
+    console.warn('Error saving tutorial to Firestore, using localStorage:', error);
+    const savedIds = getSavedTutorialIdsFromStorage(userId);
+    if (!savedIds.includes(tutorialId)) {
+      saveSavedTutorialIdsToStorage(userId, [...savedIds, tutorialId]);
+    }
   }
 }
 
 /**
  * Remove tutorial from user's saved list
  */
-export async function removeSavedTutorial(userId, tutorialId) {
+export async function removeSavedTutorial(userId, tutorialId, userRole = 'user') {
+  if (!userId) {
+    const savedIds = getSavedTutorialIdsFromStorage('guest');
+    saveSavedTutorialIdsToStorage('guest', savedIds.filter(id => id !== tutorialId));
+    return;
+  }
+
   try {
-    const userRef = doc(db, 'adminUsers', userId);
+    const userRef = getUserDocRef(userId, userRole);
     const userDoc = await getDoc(userRef);
     const savedTutorials = userDoc.data()?.savedTutorials || [];
-    
+
     await updateDoc(userRef, {
       savedTutorials: savedTutorials.filter(id => id !== tutorialId),
       updatedAt: serverTimestamp()
     });
   } catch (error) {
-    console.error('Error removing saved tutorial:', error);
-    throw error;
+    console.warn('Error removing saved tutorial from Firestore, using localStorage:', error);
+    const savedIds = getSavedTutorialIdsFromStorage(userId);
+    saveSavedTutorialIdsToStorage(userId, savedIds.filter(id => id !== tutorialId));
   }
 }
 
 /**
  * Get user's saved tutorials
  */
-export async function getUserSavedTutorials(userId) {
+export async function getUserSavedTutorials(userId, userRole = 'user') {
   try {
-    const userRef = doc(db, 'adminUsers', userId);
-    const userDoc = await getDoc(userRef);
-    const savedTutorialIds = userDoc.data()?.savedTutorials || [];
-    
+    const savedTutorialIds = await getUserSavedTutorialIds(userId, userRole);
     const tutorials = [];
     for (const tutorialId of savedTutorialIds) {
       const tutorial = await getTutorial(tutorialId);
@@ -614,12 +681,89 @@ export async function getUserSavedTutorials(userId) {
         tutorials.push(tutorial);
       }
     }
-    
     return tutorials;
   } catch (error) {
     console.error('Error getting saved tutorials:', error);
     return [];
   }
+}
+
+function getPurchasedTutorialsStorageKey(userId) {
+  return `purchasedTutorials_${userId || 'guest'}`;
+}
+
+function getPurchasedTutorialIdsFromStorage(userId) {
+  try {
+    const stored = localStorage.getItem(getPurchasedTutorialsStorageKey(userId));
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Error reading purchased tutorials from localStorage:', error);
+    return [];
+  }
+}
+
+function savePurchasedTutorialIdsToStorage(userId, ids) {
+  try {
+    localStorage.setItem(getPurchasedTutorialsStorageKey(userId), JSON.stringify(ids));
+  } catch (error) {
+    console.error('Error saving purchased tutorials to localStorage:', error);
+  }
+}
+
+export async function getUserPurchasedTutorialIds(userId, userRole = 'user') {
+  if (!userId) {
+    return [];
+  }
+
+  try {
+    const userRef = getUserDocRef(userId, userRole);
+    const userDoc = await getDoc(userRef);
+    if (userDoc.exists()) {
+      return userDoc.data()?.purchasedTutorials || [];
+    }
+  } catch (error) {
+    console.warn('Error reading purchased tutorial ids from Firestore, using localStorage:', error);
+  }
+
+  return getPurchasedTutorialIdsFromStorage(userId);
+}
+
+export async function savePurchasedTutorial(userId, tutorialId, userRole = 'user') {
+  if (!userId) {
+    const purchasedIds = getPurchasedTutorialIdsFromStorage('guest');
+    if (!purchasedIds.includes(tutorialId)) {
+      savePurchasedTutorialIdsToStorage('guest', [...purchasedIds, tutorialId]);
+    }
+    return;
+  }
+
+  try {
+    const userRef = getUserDocRef(userId, userRole);
+    const userDoc = await getDoc(userRef);
+    const purchasedTutorials = userDoc.data()?.purchasedTutorials || [];
+
+    if (!purchasedTutorials.includes(tutorialId)) {
+      await updateDoc(userRef, {
+        purchasedTutorials: [...purchasedTutorials, tutorialId],
+        updatedAt: serverTimestamp()
+      });
+    }
+  } catch (error) {
+    console.warn('Error saving purchased tutorial to Firestore, using localStorage:', error);
+    const purchasedIds = getPurchasedTutorialIdsFromStorage(userId);
+    if (!purchasedIds.includes(tutorialId)) {
+      savePurchasedTutorialIdsToStorage(userId, [...purchasedIds, tutorialId]);
+    }
+  }
+}
+
+export async function userHasPurchasedTutorial(userId, tutorialId, userRole = 'user') {
+  if (!userId) {
+    return false;
+  }
+
+  const purchasedIds = await getUserPurchasedTutorialIds(userId, userRole);
+  return purchasedIds.includes(tutorialId);
 }
 
 // ========================

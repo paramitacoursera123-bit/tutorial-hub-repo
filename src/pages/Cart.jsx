@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { savePurchasedTutorial } from '../utils/firebaseHelpers';
 import { ArrowLeft, CreditCard, Smartphone, ShieldCheck, CheckCircle } from 'lucide-react';
 
 function Cart() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser } = useAuth();
+  const { currentUser, userRole } = useAuth();
   const tutorial = location.state?.tutorial;
   const [selectedMethod, setSelectedMethod] = useState('upi');
   const [paymentStatus, setPaymentStatus] = useState('');
@@ -39,9 +40,17 @@ function Cart() {
 
     setLoading(true);
     setPaymentStatus('');
-    setTimeout(() => {
+    setTimeout(async () => {
       setLoading(false);
       setPaymentStatus('success');
+
+      if (currentUser && tutorial?.id) {
+        try {
+          await savePurchasedTutorial(currentUser.uid, tutorial.id, userRole);
+        } catch (error) {
+          console.error('Error saving purchased tutorial:', error);
+        }
+      }
     }, 1200);
   };
 

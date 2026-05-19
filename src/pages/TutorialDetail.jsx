@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc, updateDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
-import { incrementTutorialViews } from '../utils/firebaseHelpers';
+import { incrementTutorialViews, getUserSavedTutorialIds, saveTutorialToUser, removeSavedTutorial, getUserPurchasedTutorialIds } from '../utils/firebaseHelpers';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowLeft,
+  Bookmark,
   Reply,
   Trash2,
   Send,
@@ -84,6 +85,8 @@ function TutorialDetail() {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [currentSection, setCurrentSection] = useState(0);
+  const [isSaved, setIsSaved] = useState(false);
+  const [isPurchased, setIsPurchased] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyText, setReplyText] = useState('');
   const [loadingReply, setLoadingReply] = useState(null);
@@ -104,6 +107,39 @@ function TutorialDetail() {
     }
   }, [tutorial, currentUser]);
 
+  useEffect(() => {
+    const loadSavedState = async () => {
+      if (!tutorial || !currentUser) {
+        setIsSaved(false);
+        return;
+      }
+
+      try {
+        const savedIds = await getUserSavedTutorialIds(currentUser.uid, isAdmin ? 'admin' : 'user');
+        setIsSaved(savedIds.includes(tutorial.id));
+      } catch (error) {
+        console.error('Error checking saved tutorial state:', error);
+      }
+    };
+
+    const loadPurchaseState = async () => {
+      if (!tutorial || !currentUser) {
+        setIsPurchased(false);
+        return;
+      }
+
+      try {
+        const purchasedIds = await getUserPurchasedTutorialIds(currentUser.uid, isAdmin ? 'admin' : 'user');
+        setIsPurchased(purchasedIds.includes(tutorial.id));
+      } catch (error) {
+        console.error('Error checking purchased tutorial state:', error);
+      }
+    };
+
+    loadSavedState();
+    loadPurchaseState();
+  }, [tutorial, currentUser, isAdmin]);
+
   // Auto-clear success message
   useEffect(() => {
     if (commentSuccess) {
@@ -120,7 +156,7 @@ function TutorialDetail() {
     }
   }, [commentError]);
 
-  const isPremiumLocked = tutorial?.isPremium && !currentUser;
+  const hasPremiumAccess = !tutorial?.isPremium || isPurchased;
   const freeSectionLimitIndex = tutorial?.sections
     ? Math.max(0, Math.ceil(tutorial.sections.length * 0.35) - 1)
     : 0;
@@ -140,9 +176,29 @@ function TutorialDetail() {
     navigate('/cart', { state: { tutorial } });
   };
 
+  const handleToggleBookmark = async () => {
+    if (!tutorial) return;
+    if (!currentUser) {
+      navigate('/login', { state: { next: '/learning' } });
+      return;
+    }
+
+    try {
+      if (isSaved) {
+        await removeSavedTutorial(currentUser.uid, tutorial.id, isAdmin ? 'admin' : 'user');
+        setIsSaved(false);
+      } else {
+        await saveTutorialToUser(currentUser.uid, tutorial.id, isAdmin ? 'admin' : 'user');
+        setIsSaved(true);
+      }
+    } catch (error) {
+      console.error('Error toggling saved tutorial:', error);
+    }
+  };
+
   const canAccessFreeSection = (sectionIndex) => {
-    if (currentUser) return true;
-    if (tutorial?.isPremium) return false;
+    if (!tutorial?.isPremium) return true;
+    if (hasPremiumAccess) return true;
     return sectionIndex <= freeSectionLimitIndex;
   };
 
@@ -287,10 +343,6 @@ function TutorialDetail() {
   };
 
   const updateProgress = async (sectionIndex, completedSectionsList = completedSections) => {
-    if (tutorial?.isPremium && !currentUser) {
-      return;
-    }
-    
     if (!canAccessFreeSection(sectionIndex)) {
       setShowFreeSignupPrompt(true);
       return;
@@ -308,10 +360,6 @@ function TutorialDetail() {
   };
 
   const handleSectionChange = (sectionIndex) => {
-    if (tutorial?.isPremium && !currentUser) {
-      return;
-    }
-
     if (!canAccessFreeSection(sectionIndex)) {
       setShowFreeSignupPrompt(true);
       return;
@@ -613,6 +661,21 @@ function TutorialDetail() {
           {tutorial.description}
         </p>
 
+        <div className="flex flex-wrap items-center gap-3 mb-6">
+          <button
+            onClick={handleToggleBookmark}
+            className={`btn ${isSaved ? 'btn-secondary' : 'btn-primary'} flex items-center gap-2`}
+          >
+            <Bookmark className="w-4 h-4" />
+            {isSaved ? 'Saved to My Learning' : 'Save to My Learning'}
+          </button>
+          {isSaved && (
+            <span className="text-sm text-green-700 dark:text-green-200">
+              This tutorial is in your learning list.
+            </span>
+          )}
+        </div>
+
         {!currentUser && !tutorial.isPremium && (
           <div className="mb-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-200">
             Login to track your progress and resume this free tutorial later.
@@ -620,7 +683,7 @@ function TutorialDetail() {
         )}
         
         {/* Progress Bar */}
-        {currentUser && !isPremiumLocked && (
+        {currentUser && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -681,38 +744,6 @@ function TutorialDetail() {
         )}
       </div>
 
-      {/* Premium login prompt */}
-      {isPremiumLocked && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-10">
-          <div className="max-w-lg w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-6 text-center">
-            <div className="mb-4">
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-sm font-semibold">
-                <MessageSquare size={16} /> Premium access required
-              </span>
-            </div>
-            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
-              Login to buy and access this tutorial
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300 mb-6">
-              This premium tutorial requires a logged-in account. Sign in to unlock the course and continue learning.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <button
-                onClick={handlePurchase}
-                className="btn btn-primary px-6 py-3 w-full sm:w-auto"
-              >
-                Login / Buy Course
-              </button>
-              <button
-                onClick={() => navigate('/tutorials')}
-                className="btn btn-secondary px-6 py-3 w-full sm:w-auto"
-              >
-                Back to Tutorials
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="space-y-6">
@@ -736,9 +767,9 @@ function TutorialDetail() {
               </div>
             </div>
 
-            {!currentUser && !tutorial.isPremium && (
+            {tutorial.isPremium && !hasPremiumAccess && (
               <div className="mb-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 text-sm text-blue-700 dark:text-blue-200">
-                Free users can preview up to {freeSectionLimitIndex + 1} sections before login is required.
+                Preview the first {freeSectionLimitIndex + 1} section{freeSectionLimitIndex + 1 > 1 ? 's' : ''} for free. Purchase access to unlock the full premium tutorial.
               </div>
             )}
 
@@ -968,11 +999,15 @@ function TutorialDetail() {
               <button
                 onClick={() => {
                   setShowFreeSignupPrompt(false);
-                  navigate('/login');
+                  if (currentUser) {
+                    handlePurchase();
+                  } else {
+                    navigate('/login');
+                  }
                 }}
                 className="btn btn-primary px-6 py-3 w-full sm:w-auto"
               >
-                Login / Sign Up
+                {currentUser ? 'Purchase Premium Access' : 'Login / Sign Up'}
               </button>
               <button
                 onClick={() => setShowFreeSignupPrompt(false)}

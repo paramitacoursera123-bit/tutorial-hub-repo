@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Search, Filter, Clock, User, Eye } from 'lucide-react';
+import { Search, Filter, Clock, User, Eye, Bookmark } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { getAllTutorials } from '../utils/firebaseHelpers';
+import { getAllTutorials, getUserSavedTutorialIds, saveTutorialToUser, removeSavedTutorial } from '../utils/firebaseHelpers';
 
 function Tutorials() {
   const [tutorials, setTutorials] = useState([]);
@@ -12,11 +12,34 @@ function Tutorials() {
   const [categories, setCategories] = useState([]);
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, userRole } = useAuth();
+  const [savedTutorialIds, setSavedTutorialIds] = useState([]);
+  const [savedLoading, setSavedLoading] = useState(false);
 
   useEffect(() => {
     fetchTutorialsFromFirestore();
   }, [location.pathname]);
+
+  useEffect(() => {
+    const fetchSaved = async () => {
+      if (!currentUser) {
+        setSavedTutorialIds([]);
+        return;
+      }
+
+      try {
+        setSavedLoading(true);
+        const ids = await getUserSavedTutorialIds(currentUser.uid, userRole);
+        setSavedTutorialIds(ids);
+      } catch (error) {
+        console.error('Error loading saved tutorials:', error);
+      } finally {
+        setSavedLoading(false);
+      }
+    };
+
+    fetchSaved();
+  }, [currentUser, userRole]);
 
   const fetchTutorialsFromFirestore = async () => {
     try {
@@ -51,21 +74,28 @@ function Tutorials() {
   };
 
   const handleTutorialClick = (tutorial) => {
-    if (tutorial.isPremium) {
-      if (!currentUser) {
-        navigate('/login', {
-          state: {
-            next: '/cart',
-            nextState: { tutorial }
-          }
-        });
-        return;
-      }
-      navigate('/cart', { state: { tutorial } });
+    navigate(`/tutorial/${tutorial.id}`);
+  };
+
+  const handleToggleBookmark = async (event, tutorialId) => {
+    event.stopPropagation();
+
+    if (!currentUser) {
+      navigate('/login', { state: { next: '/learning' } });
       return;
     }
 
-    navigate(`/tutorial/${tutorial.id}`);
+    try {
+      if (savedTutorialIds.includes(tutorialId)) {
+        await removeSavedTutorial(currentUser.uid, tutorialId, userRole);
+        setSavedTutorialIds((prev) => prev.filter((id) => id !== tutorialId));
+      } else {
+        await saveTutorialToUser(currentUser.uid, tutorialId, userRole);
+        setSavedTutorialIds((prev) => [...prev, tutorialId]);
+      }
+    } catch (error) {
+      console.error('Error toggling tutorial bookmark:', error);
+    }
   };
 
   if (loading) {
@@ -131,12 +161,20 @@ function Tutorials() {
             const cardClass = `card transition-shadow duration-200 ${isLocked ? 'hover:shadow-md cursor-pointer' : 'hover:shadow-lg'}`;
 
             return (
-              <button
+              <div
                 key={tutorial.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => handleTutorialClick(tutorial)}
-                className={cardClass}
+                className={`${cardClass} relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary-500`}
               >
+                <button
+                  type="button"
+                  onClick={(event) => handleToggleBookmark(event, tutorial.id)}
+                  className={`absolute top-4 right-4 z-10 rounded-full p-2 transition ${savedTutorialIds.includes(tutorial.id) ? 'bg-primary-600 text-white shadow-lg' : 'bg-white/90 text-gray-600 dark:bg-gray-900/90 dark:text-gray-200 hover:text-primary-600'}`}
+                >
+                  <Bookmark className="w-5 h-5" />
+                </button>
                 {tutorial.thumbnail && (
                   <img
                     src={tutorial.thumbnail}
@@ -192,7 +230,7 @@ function Tutorials() {
                     </div>
                   )}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>

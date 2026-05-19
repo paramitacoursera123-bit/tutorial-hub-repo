@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { User, Mail, Calendar, Edit2, LogOut, ArrowLeft } from 'lucide-react';
 
@@ -183,14 +183,22 @@ function Profile() {
       {/* Account Actions */}
       <div className="card">
         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Account Actions</h3>
-        <button
-          onClick={handleLogout}
-          disabled={loading}
-          className="w-full btn btn-danger flex items-center justify-center"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          {loading ? 'Logging out...' : 'Logout'}
-        </button>
+        <div className="flex flex-col gap-3">
+          <Link
+            to="/learning"
+            className="btn btn-secondary w-full"
+          >
+            View My Learning
+          </Link>
+          <button
+            onClick={handleLogout}
+            disabled={loading}
+            className="w-full btn btn-danger flex items-center justify-center"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            {loading ? 'Logging out...' : 'Logout'}
+          </button>
+        </div>
       </div>
     </div>
   );
