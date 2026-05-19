@@ -38,3 +38,6 @@ firestore-debug.log
 # Temporary files
 *.tmp
 *.temp
+
+#package file
+package-lock.json

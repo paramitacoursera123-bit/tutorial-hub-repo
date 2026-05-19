@@ -4,12 +4,17 @@ import {
   signOut, 
   onAuthStateChanged,
   GoogleAuthProvider,
-  GithubAuthProvider,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
+
+// Admin emails list - hardcoded admins
+const ADMIN_EMAILS = [
+  'pathikritsan80@gmail.com',
+  'paramitacoursera123@gmail.com'
+];
 
 const AuthContext = createContext();
 
@@ -23,7 +28,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Add user to Firestore adminUsers collection (all OAuth users are admins)
+  // Add or update a Firestore admin user profile
   async function addAdminUser(user) {
     try {
       const adminUserRef = doc(db, 'adminUsers', user.uid);
@@ -39,6 +44,7 @@ export function AuthProvider({ children }) {
           displayName: provider.displayName,
           photoURL: provider.photoURL
         })),
+        role: 'admin',
         createdAt: new Date(),
         lastLogin: new Date()
       }, { merge: true });
@@ -46,6 +52,34 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.error('Error adding admin user:', err);
       setError(`Failed to create admin profile: ${err.message}`);
+      return false;
+    }
+  }
+
+  // Add or update a Firestore regular user profile
+  async function addRegularUser(user) {
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      await setDoc(userRef, {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || null,
+        photoURL: user.photoURL || null,
+        providerData: user.providerData.map(provider => ({
+          provider: provider.providerId,
+          uid: provider.uid,
+          email: provider.email,
+          displayName: provider.displayName,
+          photoURL: provider.photoURL
+        })),
+        role: 'user',
+        createdAt: new Date(),
+        lastLogin: new Date()
+      }, { merge: true });
+      return true;
+    } catch (err) {
+      console.error('Error adding regular user:', err);
+      setError(`Failed to create user profile: ${err.message}`);
       return false;
     }
   }
@@ -67,13 +101,30 @@ export function AuthProvider({ children }) {
       setError(null);
       const result = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Create user profile in Firestore (regular user, not admin)
-      await setDoc(doc(db, 'users', result.user.uid), {
-        email,
-        displayName,
-        role: 'user',
-        createdAt: new Date(),
-      });
+      // Check if this email should be an admin
+      const isAdminEmail = ADMIN_EMAILS.includes(email.toLowerCase());
+      
+      if (isAdminEmail) {
+        // Create admin user in adminUsers collection
+        await setDoc(doc(db, 'adminUsers', result.user.uid), {
+          uid: result.user.uid,
+          email,
+          displayName,
+          photoURL: null,
+          role: 'admin',
+          createdAt: new Date(),
+          lastLogin: new Date()
+        }, { merge: true });
+      } else {
+        // Create regular user in users collection
+        await setDoc(doc(db, 'users', result.user.uid), {
+          uid: result.user.uid,
+          email,
+          displayName,
+          role: 'user',
+          createdAt: new Date()
+        }, { merge: true });
+      }
       
       return result;
     } catch (err) {
@@ -113,9 +164,13 @@ export function AuthProvider({ children }) {
       provider.addScope('email');
       
       const result = await signInWithPopup(auth, provider);
+      const adminExists = await checkAdminStatus(result.user.uid);
       
-      // Add user to adminUsers collection (all OAuth users are admins)
-      await addAdminUser(result.user);
+      if (adminExists) {
+        await addAdminUser(result.user);
+      } else {
+        await addRegularUser(result.user);
+      }
       
       return result;
     } catch (err) {
@@ -131,24 +186,19 @@ export function AuthProvider({ children }) {
     }
   }
 
-  async function loginWithGithub() {
+  async function refreshUserRole(uid) {
     try {
-      setError(null);
-      const provider = new GithubAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      
-      // Add user to adminUsers collection (all OAuth users are admins)
-      await addAdminUser(result.user);
-      
-      return result;
+      const userId = uid || auth.currentUser?.uid;
+      if (!userId) return false;
+
+      const adminUserRef = doc(db, 'adminUsers', userId);
+      const adminSnap = await getDoc(adminUserRef);
+      const isAdmin = adminSnap.exists();
+      setUserRole(isAdmin ? 'admin' : 'user');
+      return isAdmin;
     } catch (err) {
-      const errorMessage = err.code === 'auth/popup-closed-by-user' 
-        ? 'Sign in was cancelled' 
-        : err.code === 'auth/popup-blocked'
-        ? 'Sign in popup was blocked. Please allow popups for this site.'
-        : err.message;
-      setError(errorMessage);
-      throw err;
+      console.error('Error refreshing user role:', err);
+      return false;
     }
   }
 
@@ -171,8 +221,13 @@ export function AuthProvider({ children }) {
         if (user) {
           setCurrentUser(user);
           
-          // Check if user is an admin
-          const isAdmin = await checkAdminStatus(user.uid);
+          // Check if user is an admin (OAuth user or email-based admin)
+          let isAdmin = false;
+          
+          // Check if in adminUsers collection
+          const adminUserRef = doc(db, 'adminUsers', user.uid);
+          const adminSnap = await getDoc(adminUserRef);
+          isAdmin = adminSnap.exists();
           setUserRole(isAdmin ? 'admin' : 'user');
         } else {
           setCurrentUser(null);
@@ -196,8 +251,8 @@ export function AuthProvider({ children }) {
     signup,
     login,
     loginWithGoogle,
-    loginWithGithub,
     logout,
+    refreshUserRole,
     isAdmin: userRole === 'admin'
   };
 

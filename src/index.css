@@ -7,6 +7,26 @@
     font-family: 'Inter', system-ui, sans-serif;
     scroll-behavior: smooth;
   }
+
+  body {
+    background-color: #ffffff;
+    color: #111827;
+    min-height: 100vh;
+  }
+
+  html.dark body {
+    background-color: #020617;
+    color: #f8fafc;
+  }
+
+  body, input, textarea, select, button {
+    @apply font-sans;
+  }
+
+  .prose,
+  .prose * {
+    color: inherit !important;
+  }
 }
 
 @keyframes fadeInUp {
@@ -73,6 +93,14 @@
     @apply bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 shadow-lg hover:shadow-xl;
   }
 
+  .btn-neutral {
+    @apply bg-gradient-to-r from-gray-400 to-gray-500 text-white hover:from-gray-500 hover:to-gray-600 focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 shadow-md hover:shadow-lg;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1 text-sm rounded-md font-medium transition-all duration-200 transform hover:scale-105 active:scale-95;
+  }
+
   .btn-icon {
     @apply p-3 rounded-lg transition-all duration-200 transform hover:scale-110 active:scale-95 shadow-md hover:shadow-lg;
   }
@@ -95,5 +123,9 @@
 
   .btn-navbar {
     @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 active:scale-95 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:border-primary-500 dark:hover:border-primary-400 hover:text-primary-600 dark:hover:text-primary-400 shadow-sm hover:shadow-md;
+  }
+
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 border border-gray-200 dark:border-gray-700 transition-all duration-200;
   }
 }

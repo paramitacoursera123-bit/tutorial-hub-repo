@@ -33,6 +33,11 @@ function Navbar() {
             <Link to="/tutorials" className="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors font-medium">
               Tutorials
             </Link>
+            {currentUser && (
+              <Link to="/learning" className="text-gray-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors font-medium">
+                My Learning
+              </Link>
+            )}
 
             {currentUser ? (
               <>

@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Eye, Upload, Save } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Upload, Save, Users, BookOpen, BarChart3, Check, X } from 'lucide-react';
+import UserManagement from '../components/UserManagement';
+import Analytics from '../components/Analytics';
+import { createTutorial, updateTutorial, deleteTutorial, getAllTutorials, getTutorial } from '../utils/firebaseHelpers';
 
 // Sample tutorials data (same as in Tutorials.jsx)
 const initialSampleTutorials = [
@@ -48,6 +51,7 @@ function App() {
 - Explore [state and lifecycle](https://reactjs.org/docs/state-and-lifecycle.html)
 `,
     category: "React",
+    status: 'published',
     readTime: 15,
     isPremium: false,
     authorName: "Tutorial Platform Team",
@@ -154,6 +158,7 @@ console.log(add(5, 3)); // 8
 \`\`\`
 `,
     category: "JavaScript",
+    status: 'published',
     readTime: 20,
     isPremium: false,
     authorName: "Tutorial Platform Team",
@@ -166,6 +171,7 @@ console.log(add(5, 3)); // 8
     id: '3',
     title: "CSS Grid Layout Complete Guide",
     description: "Learn CSS Grid layout system for creating complex, responsive web layouts with ease.",
+    status: 'draft',
     content: `# CSS Grid Layout Complete Guide
 
 CSS Grid Layout is a two-dimensional layout method for the web. It lets you lay content out in rows and columns.
@@ -280,6 +286,7 @@ Use media queries and grid properties to create responsive layouts.
 
 function AdminDashboard() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('analytics');
   const [tutorials, setTutorials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -289,6 +296,7 @@ function AdminDashboard() {
     description: '',
     content: '',
     category: '',
+    status: 'draft',
     readTime: 5,
     isPremium: false,
     thumbnail: '',
@@ -297,10 +305,23 @@ function AdminDashboard() {
   });
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [publishingId, setPublishingId] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     fetchTutorials();
   }, []);
+
+  // Auto-clear success message after 3 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage('');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const fetchTutorials = async () => {
     // Load from localStorage first, then fall back to sample data
@@ -330,6 +351,7 @@ function AdminDashboard() {
 
       const tutorialData = {
         ...formData,
+        status: formData.status || 'draft',
         thumbnail: thumbnailFile ? URL.createObjectURL(thumbnailFile) : formData.thumbnail,
         authorName: 'Admin',
         createdAt: new Date(),
@@ -341,19 +363,69 @@ function AdminDashboard() {
         // Update existing tutorial
         updatedTutorials = tutorials.map(tutorial =>
           tutorial.id === editingTutorial.id
-            ? { ...tutorialData, id: editingTutorial.id }
+            ? (() => {
+                const prev = tutorial;
+                const prevSnapshot = { ...prev, versionedAt: new Date() };
+                const versions = Array.isArray(prev.versions) ? [...prev.versions, prevSnapshot] : [prevSnapshot];
+                return { ...tutorialData, id: editingTutorial.id, versions };
+              })()
             : tutorial
         );
       } else {
         // Add new tutorial
         const newId = Date.now().toString();
-        updatedTutorials = [...tutorials, { ...tutorialData, id: newId }];
+        updatedTutorials = [...tutorials, { ...tutorialData, id: newId, versions: [] }];
       }
 
       saveTutorialsToStorage(updatedTutorials);
       resetForm();
     } catch (error) {
       console.error('Error saving tutorial:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Publish a tutorial to the public tutorials collection/localStorage
+  const handlePublish = async () => {
+    try {
+      setUploading(true);
+      setError('');
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const publishId = editingTutorial?.id || Date.now().toString();
+      const tutorialData = {
+        ...formData,
+        status: 'published',
+        thumbnail: thumbnailFile ? URL.createObjectURL(thumbnailFile) : formData.thumbnail,
+        authorName: 'Admin',
+        createdAt: editingTutorial?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        versions: editingTutorial?.versions || [],
+        id: publishId
+      };
+
+      // Create/update in public tutorials (Firestore or localStorage fallback)
+      try {
+        const publishedId = await createTutorial(tutorialData, publishId);
+        console.log('Published tutorial id:', publishedId);
+      } catch (err) {
+        console.error('Error publishing tutorial:', err);
+        throw err;
+      }
+
+      // Keep admin storage in sync with the published tutorial ID
+      const updatedTutorials = editingTutorial
+        ? tutorials.map(t => t.id === editingTutorial.id ? { ...t, ...tutorialData, id: publishId } : t)
+        : [...tutorials, { ...tutorialData, id: publishId, versions: [] }];
+
+      saveTutorialsToStorage(updatedTutorials);
+      setSuccessMessage('Tutorial published successfully!');
+      resetForm();
+    } catch (error) {
+      console.error('Error publishing tutorial:', error);
+      setError(`Failed to publish tutorial: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -366,6 +438,7 @@ function AdminDashboard() {
       description: tutorial.description || '',
       content: tutorial.content || '',
       category: tutorial.category || '',
+      status: tutorial.status || 'draft',
       readTime: tutorial.readTime || 5,
       isPremium: tutorial.isPremium || false,
       thumbnail: tutorial.thumbnail || '',
@@ -378,8 +451,46 @@ function AdminDashboard() {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this tutorial?')) return;
 
-    const updatedTutorials = tutorials.filter(tutorial => tutorial.id !== id);
-    saveTutorialsToStorage(updatedTutorials);
+    try {
+      setError('');
+      
+      console.log('🗑️ DELETE STARTED for tutorial ID:', id);
+      console.log('📋 Admin tutorials before delete:', tutorials.map(t => ({ id: t.id, title: t.title })));
+      
+      // Delete from public tutorials storage (Firestore or localStorage 'tutorials')
+      try {
+        await deleteTutorial(id);
+        console.log('✅ Tutorial deleted from public storage:', id);
+      } catch (firestoreError) {
+        console.warn('⚠️ Firestore delete failed, attempting localStorage fallback:', firestoreError.message);
+        
+        // Manually delete from localStorage 'tutorials' as fallback
+        try {
+          const publicTutorials = JSON.parse(localStorage.getItem('tutorials') || '[]');
+          console.log('📋 Public tutorials before manual delete:', publicTutorials.map(t => ({ id: t.id, title: t.title })));
+          
+          const filtered = publicTutorials.filter(t => t.id !== id);
+          
+          console.log('📋 Public tutorials after filter:', filtered.map(t => ({ id: t.id, title: t.title })));
+          localStorage.setItem('tutorials', JSON.stringify(filtered));
+          console.log('✅ Tutorial deleted from localStorage tutorials:', id);
+        } catch (storageError) {
+          console.error('Failed to delete from localStorage:', storageError);
+        }
+      }
+
+      // Delete from admin storage
+      const updatedTutorials = tutorials.filter(tutorial => tutorial.id !== id);
+      console.log('📋 Admin tutorials after delete:', updatedTutorials.map(t => ({ id: t.id, title: t.title })));
+      
+      saveTutorialsToStorage(updatedTutorials);
+      
+      setSuccessMessage('Tutorial deleted successfully!');
+      console.log('✅ Tutorial deleted successfully from all storage:', id);
+    } catch (error) {
+      console.error('Error deleting tutorial:', error);
+      setError(`Failed to delete tutorial: ${error.message}`);
+    }
   };
 
   const resetForm = () => {
@@ -397,6 +508,8 @@ function AdminDashboard() {
     setThumbnailFile(null);
     setEditingTutorial(null);
     setShowForm(false);
+    setError('');
+    setSuccessMessage('');
   };
 
   const addSection = () => {
@@ -427,25 +540,97 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Admin Dashboard
-        </h1>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <Plus size={18} />
-          {showForm ? 'Cancel' : 'Add Tutorial'}
-        </button>
+      {/* Tab Navigation */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <div className="flex gap-8 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'analytics'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <BarChart3 size={20} />
+            Analytics
+          </button>
+          <button
+            onClick={() => setActiveTab('tutorials')}
+            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'tutorials'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <BookOpen size={20} />
+            Manage Tutorials
+          </button>
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`py-3 px-4 font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'users'
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <Users size={20} />
+            User Management
+          </button>
+        </div>
       </div>
 
-      {showForm && (
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-            {editingTutorial ? 'Edit Tutorial' : 'Add New Tutorial'}
-          </h2>
-          
+      {/* Analytics Tab */}
+      {activeTab === 'analytics' && (
+        <Analytics />
+      )}
+
+      {/* Tutorials Tab */}
+      {activeTab === 'tutorials' && (
+        <div className="space-y-8">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              Admin Dashboard
+            </h1>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="btn btn-primary flex items-center gap-2"
+            >
+              <Plus size={18} />
+              {showForm ? 'Cancel' : 'Add Tutorial'}
+            </button>
+          </div>
+
+          {/* Error Message Display */}
+          {error && (
+            <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-800 dark:text-red-200 px-4 py-3 rounded-md flex justify-between items-center">
+              <span>{error}</span>
+              <button
+                onClick={() => setError('')}
+                className="text-red-600 dark:text-red-300 font-bold text-xl hover:text-red-800 dark:hover:text-red-100"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {/* Success Message Display */}
+          {successMessage && (
+            <div className="bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-700 text-green-800 dark:text-green-200 px-4 py-3 rounded-md flex justify-between items-center">
+              <span>{successMessage}</span>
+              <button
+                onClick={() => setSuccessMessage('')}
+                className="text-green-600 dark:text-green-300 font-bold text-xl hover:text-green-800 dark:hover:text-green-100"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {showForm && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+                {editingTutorial ? 'Edit Tutorial' : 'Add New Tutorial'}
+              </h2>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid md:grid-cols-2 gap-4">
               <div>
@@ -623,28 +808,41 @@ function AdminDashboard() {
               <button
                 type="submit"
                 disabled={uploading}
-                className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                title="Save as Draft"
               >
                 <Save size={18} />
-                {uploading ? 'Saving...' : (editingTutorial ? 'Update Tutorial' : 'Create Tutorial')}
+                {uploading ? 'Saving...' : (editingTutorial ? 'Save Draft' : 'Save as Draft')}
               </button>
+
+              <button
+                type="button"
+                onClick={handlePublish}
+                disabled={uploading}
+                className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                title="Publish tutorial"
+              >
+                <Upload size={18} />
+                {uploading ? 'Publishing...' : (editingTutorial ? 'Publish Update' : 'Publish')}
+              </button>
+
               <button
                 type="button"
                 onClick={resetForm}
-                className="btn btn-secondary"
+                className="btn btn-neutral"
               >
                 Cancel
               </button>
             </div>
           </form>
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* Tutorials List */}
-      <div className="card">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-          Manage Tutorials ({tutorials.length})
-        </h2>
+          {/* Tutorials List */}
+          <div className="card">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
+              Manage Tutorials ({tutorials.length})
+            </h2>
         
         {tutorials.length === 0 ? (
           <p className="text-gray-600 dark:text-gray-300">No tutorials found.</p>
@@ -652,32 +850,148 @@ function AdminDashboard() {
           <div className="space-y-4">
             {tutorials.map(tutorial => (
               <div
-                className="tutorial-tile cursor-pointer p-4 border rounded-md hover:shadow-lg transition-shadow hover:bg-gray-100 dark:hover:bg-gray-700"
-                onClick={() => {
-                  if (tutorial.id) {
-                    console.log(`Navigating to tutorial: /tutorial/${tutorial.id}`);
-                    navigate(`/tutorial/${tutorial.id}`);
-                  } else {
-                    console.error('Tutorial ID is undefined');
-                  }
-                }}
+                key={tutorial.id}
+                className="tutorial-tile p-4 border border-gray-200 dark:border-gray-700 rounded-md hover:shadow-lg transition-shadow hover:bg-gray-50 dark:hover:bg-gray-800"
               >
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
-                  {tutorial.title}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                  {tutorial.description}
-                </p>
-                {tutorial.isPremium && (
-                  <span className="inline-block bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-1 rounded mt-1">
-                    Premium
-                  </span>
-                )}
+                <div className="flex items-start justify-between gap-4">
+                  {/* Tutorial Info */}
+                  <div
+                    className="flex-1 cursor-pointer min-w-0"
+                    onClick={() => {
+                      if (tutorial.id) {
+                        console.log(`Navigating to tutorial: /tutorial/${tutorial.id}`);
+                        navigate(`/tutorial/${tutorial.id}`);
+                      } else {
+                        console.error('Tutorial ID is undefined');
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 truncate">
+                        {tutorial.title}
+                      </h3>
+                      {/* Status Badge */}
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                          tutorial.status === 'published'
+                            ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                            : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+                        }`}
+                      >
+                        {tutorial.status === 'published' ? (
+                          <>
+                            <Check size={12} />
+                            Published
+                          </>
+                        ) : (
+                          <>
+                            <X size={12} />
+                            Draft
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
+                      {tutorial.description}
+                    </p>
+                    <div className="flex items-center gap-2 mt-3">
+                      {tutorial.isPremium && (
+                        <span className="inline-block bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-1 rounded">
+                          Premium
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {tutorial.category}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {tutorial.readTime || 5} min read
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={() => handleEdit(tutorial)}
+                      title="Edit this tutorial"
+                      className="btn-icon btn-icon-primary hover:bg-blue-100 dark:hover:bg-blue-900 p-2"
+                    >
+                      <Edit size={18} />
+                    </button>
+
+                    {tutorial.status === 'draft' && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            setPublishingId(tutorial.id);
+                            setError('');
+                            
+                            console.log('Publishing tutorial:', tutorial.id);
+                            
+                            const tutorialData = {
+                              ...tutorial,
+                              status: 'published',
+                              createdAt: tutorial.createdAt || new Date().toISOString(),
+                              updatedAt: new Date().toISOString(),
+                              versions: tutorial.versions || []
+                            };
+
+                            // Publish to public tutorials storage
+                            try {
+                              // Create the tutorial in public storage with same ID
+                              const publishedId = await createTutorial(tutorialData, tutorial.id);
+                              console.log('Tutorial published to public storage:', publishedId);
+                            } catch (publicError) {
+                              console.error('Error publishing to public storage:', publicError);
+                              throw publicError;
+                            }
+
+                            // Update local admin storage to mark as published
+                            const updatedTutorials = tutorials.map(t => 
+                              t.id === tutorial.id 
+                                ? { ...t, status: 'published', updatedAt: new Date().toISOString() } 
+                                : t
+                            );
+                            saveTutorialsToStorage(updatedTutorials);
+                            
+                            setSuccessMessage(`"${tutorial.title}" published successfully!`);
+                            console.log('Tutorial published successfully:', tutorial.id);
+                          } catch (error) {
+                            console.error('Error publishing tutorial:', error);
+                            setError(`Failed to publish tutorial: ${error.message}`);
+                          } finally {
+                            setPublishingId(null);
+                          }
+                        }}
+                        disabled={uploading || publishingId === tutorial.id}
+                        title="Publish this draft"
+                        className="btn-icon btn-icon-success hover:bg-green-100 dark:hover:bg-green-900 p-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      >
+                        <Upload size={18} />
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleDelete(tutorial.id)}
+                      title="Delete this tutorial"
+                      className="btn-icon btn-icon-danger hover:bg-red-100 dark:hover:bg-red-900 p-2"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+          </div>
+        </div>
+      )}
+
+      {/* Users Tab */}
+      {activeTab === 'users' && (
+        <UserManagement />
+      )}
     </div>
   );
 }

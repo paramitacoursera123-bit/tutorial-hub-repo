@@ -1,49 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, Filter, Clock, User } from 'lucide-react';
-
-// Sample tutorials data (fallback when Firestore is not available)
-const sampleTutorials = [
-  {
-    id: '1',
-    title: "Getting Started with React",
-    description: "Learn the fundamentals of React development including components, props, state, and hooks.",
-    category: "React",
-    readTime: 15,
-    isPremium: false,
-    authorName: "Tutorial Platform Team",
-    createdAt: new Date(),
-    thumbnail: "",
-    videoUrl: "",
-    sections: []
-  },
-  {
-    id: '2',
-    title: "JavaScript ES6+ Features",
-    description: "Master modern JavaScript features including arrow functions, destructuring, promises, and async/await.",
-    category: "JavaScript",
-    readTime: 20,
-    isPremium: false,
-    authorName: "Tutorial Platform Team",
-    createdAt: new Date(),
-    thumbnail: "",
-    videoUrl: "",
-    sections: []
-  },
-  {
-    id: '3',
-    title: "CSS Grid Layout Complete Guide",
-    description: "Learn CSS Grid layout system for creating complex, responsive web layouts with ease.",
-    category: "CSS",
-    readTime: 25,
-    isPremium: false,
-    authorName: "Tutorial Platform Team",
-    createdAt: new Date(),
-    thumbnail: "",
-    videoUrl: "",
-    sections: []
-  }
-];
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Search, Filter, Clock, User, Eye, Bookmark } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { getAllTutorials, getUserSavedTutorialIds, saveTutorialToUser, removeSavedTutorial } from '../utils/firebaseHelpers';
 
 function Tutorials() {
   const [tutorials, setTutorials] = useState([]);
@@ -51,61 +10,52 @@ function Tutorials() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState([]);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { currentUser, userRole } = useAuth();
+  const [savedTutorialIds, setSavedTutorialIds] = useState([]);
+  const [savedLoading, setSavedLoading] = useState(false);
 
   useEffect(() => {
-    fetchTutorials();
-  }, []);
+    fetchTutorialsFromFirestore();
+  }, [location.pathname]);
 
-  const fetchTutorials = async () => {
-    // Use sample data immediately for fast loading
-    setTutorials(sampleTutorials);
-    const categorySet = new Set(sampleTutorials.map(t => t.category));
-    setCategories(['all', ...Array.from(categorySet)]);
-    setLoading(false);
-
-    // Try to load admin-created tutorials from localStorage
-    const adminTutorials = localStorage.getItem('adminTutorials');
-    if (adminTutorials) {
-      const parsedAdminTutorials = JSON.parse(adminTutorials);
-      setTutorials(parsedAdminTutorials);
-      const adminCategorySet = new Set(parsedAdminTutorials.map(t => t.category));
-      setCategories(['all', ...Array.from(adminCategorySet)]);
-    }
-
-    // Try to fetch from Firestore in the background (optional)
-    try {
-      // const { collection, getDocs, query, orderBy } = await import('firebase/firestore');
-      // const { db } = await import('../firebase/config');
-
-      const tutorialsRef = collection(db, 'tutorials');
-      const q = query(tutorialsRef, orderBy('createdAt', 'desc'));
-
-      // Add timeout to Firebase request
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Firebase timeout')), 3000)
-      );
-
-      const querySnapshot = await Promise.race([getDocs(q), timeoutPromise]);
-
-      const tutorialsData = [];
-      const firebaseCategorySet = new Set();
-
-      querySnapshot.forEach((doc) => {
-        const tutorial = { id: doc.id, ...doc.data() };
-        tutorialsData.push(tutorial);
-        if (tutorial.category) {
-          firebaseCategorySet.add(tutorial.category);
-        }
-      });
-
-      if (tutorialsData.length > 0) {
-        // Replace with real Firebase data
-        setTutorials(tutorialsData);
-        setCategories(['all', ...Array.from(firebaseCategorySet)]);
+  useEffect(() => {
+    const fetchSaved = async () => {
+      if (!currentUser) {
+        setSavedTutorialIds([]);
+        return;
       }
+
+      try {
+        setSavedLoading(true);
+        const ids = await getUserSavedTutorialIds(currentUser.uid, userRole);
+        setSavedTutorialIds(ids);
+      } catch (error) {
+        console.error('Error loading saved tutorials:', error);
+      } finally {
+        setSavedLoading(false);
+      }
+    };
+
+    fetchSaved();
+  }, [currentUser, userRole]);
+
+  const fetchTutorialsFromFirestore = async () => {
+    try {
+      setLoading(true);
+      const data = await getAllTutorials();
+      // Expose only published tutorials to public listing
+      const publicTutorials = data.filter(t => (t.status || 'published') !== 'draft');
+      setTutorials(publicTutorials);
+
+      // Extract unique categories
+      const categorySet = new Set(publicTutorials.map(t => t.category));
+      setCategories(['all', ...Array.from(categorySet)]);
     } catch (error) {
-      // Keep using local data, Firebase failed
-      console.log('Using local data, Firebase not available:', error.message);
+      console.error('Error loading tutorials:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -115,6 +65,38 @@ function Tutorials() {
     const matchesCategory = selectedCategory === 'all' || tutorial.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+
+  const getPriceLabel = (tutorial) => {
+    if (tutorial.price !== undefined && tutorial.price !== null) {
+      return `$${Number(tutorial.price).toFixed(2)}`;
+    }
+    return '$9.99';
+  };
+
+  const handleTutorialClick = (tutorial) => {
+    navigate(`/tutorial/${tutorial.id}`);
+  };
+
+  const handleToggleBookmark = async (event, tutorialId) => {
+    event.stopPropagation();
+
+    if (!currentUser) {
+      navigate('/login', { state: { next: '/learning' } });
+      return;
+    }
+
+    try {
+      if (savedTutorialIds.includes(tutorialId)) {
+        await removeSavedTutorial(currentUser.uid, tutorialId, userRole);
+        setSavedTutorialIds((prev) => prev.filter((id) => id !== tutorialId));
+      } else {
+        await saveTutorialToUser(currentUser.uid, tutorialId, userRole);
+        setSavedTutorialIds((prev) => [...prev, tutorialId]);
+      }
+    } catch (error) {
+      console.error('Error toggling tutorial bookmark:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -173,41 +155,59 @@ function Tutorials() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTutorials.map(tutorial => (
-            <Link
-              key={tutorial.id}
-              to={`/tutorial/${tutorial.id}`}
-              className="card hover:shadow-lg transition-shadow duration-200"
-            >
-              {tutorial.thumbnail && (
-                <img
-                  src={tutorial.thumbnail}
-                  alt={tutorial.title}
-                  className="w-full h-48 object-cover rounded-t-lg"
-                />
-              )}
-              
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-primary-600 dark:text-primary-400 font-medium">
-                    {tutorial.category}
-                  </span>
-                  {tutorial.isPremium && (
-                    <span className="bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 text-xs px-2 py-1 rounded">
-                      Premium
+          {filteredTutorials.map(tutorial => {
+            const priceLabel = getPriceLabel(tutorial);
+            const isLocked = tutorial.isPremium && !currentUser;
+            const cardClass = `card transition-shadow duration-200 ${isLocked ? 'hover:shadow-md cursor-pointer' : 'hover:shadow-lg'}`;
+
+            return (
+              <div
+                key={tutorial.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleTutorialClick(tutorial)}
+                className={`${cardClass} relative overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary-500`}
+              >
+                <button
+                  type="button"
+                  onClick={(event) => handleToggleBookmark(event, tutorial.id)}
+                  className={`absolute top-4 right-4 z-10 rounded-full p-2 transition ${savedTutorialIds.includes(tutorial.id) ? 'bg-primary-600 text-white shadow-lg' : 'bg-white/90 text-gray-600 dark:bg-gray-900/90 dark:text-gray-200 hover:text-primary-600'}`}
+                >
+                  <Bookmark className="w-5 h-5" />
+                </button>
+                {tutorial.thumbnail && (
+                  <img
+                    src={tutorial.thumbnail}
+                    alt={tutorial.title}
+                    className="w-full h-48 object-cover rounded-t-lg"
+                  />
+                )}
+                
+                <div className="p-6 text-left">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-primary-600 dark:text-primary-400 font-medium">
+                      {tutorial.category}
                     </span>
+                    <span className={`text-xs px-2 py-1 rounded ${tutorial.isPremium ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'}`}>
+                      {tutorial.isPremium ? 'Premium' : 'FREE'}
+                    </span>
+                  </div>
+                  
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                    {tutorial.title}
+                  </h3>
+                  
+                  <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
+                    {tutorial.description}
+                  </p>
+
+                  {tutorial.isPremium && (
+                    <div className="mb-4 rounded-lg bg-yellow-50 dark:bg-yellow-900 p-3 text-sm text-yellow-800 dark:text-yellow-200">
+                      <span className="font-semibold">{priceLabel}</span> — Premium content requires purchase.
+                    </div>
                   )}
-                </div>
-                
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  {tutorial.title}
-                </h3>
-                
-                <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
-                  {tutorial.description}
-                </p>
-                
-                <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+
+<div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                   <div className="flex items-center">
                     <User size={16} className="mr-1" />
                     {tutorial.authorName}
@@ -216,10 +216,23 @@ function Tutorials() {
                     <Clock size={16} className="mr-1" />
                     {tutorial.readTime} min read
                   </div>
+                  <div className="flex items-center">
+                    <Eye size={16} className="mr-1" />
+                    {(tutorial.views || 0).toLocaleString()} views
+                    </div>
+                  </div>
+
+                  {tutorial.isPremium && (
+                    <div className="mt-4 text-sm font-medium text-primary-700 dark:text-primary-200">
+                      {isLocked
+                        ? 'Login to view and purchase premium access.'
+                        : 'Click to view purchase options and unlock this tutorial.'}
+                    </div>
+                  )}
                 </div>
               </div>
-            </Link>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

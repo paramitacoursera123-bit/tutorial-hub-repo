@@ -7,9 +7,14 @@ import Home from './pages/Home';
 import Tutorials from './pages/Tutorials';
 import TutorialDetail from './pages/TutorialDetail';
 import AdminDashboard from './pages/AdminDashboard';
+import Cart from './pages/Cart';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Profile from './pages/Profile';
+import Settings from './pages/Settings';
+import MyLearning from './pages/MyLearning';
 import ProtectedRoute from './components/ProtectedRoute';
+import './debug'; // Debug helper for console access
 import './App.css';
 
 function App() {
@@ -26,6 +31,31 @@ function App() {
                 <Route path="/tutorial/:id" element={<TutorialDetail />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route 
+                  path="/profile" 
+                  element={
+                    <ProtectedRoute>
+                      <Profile />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/learning" 
+                  element={
+                    <ProtectedRoute>
+                      <MyLearning />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/settings" 
+                  element={
+                    <ProtectedRoute>
+                      <Settings />
+                    </ProtectedRoute>
+                  } 
+                />
                 <Route 
                   path="/admin/*" 
                   element={
