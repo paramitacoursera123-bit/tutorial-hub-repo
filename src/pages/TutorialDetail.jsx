@@ -747,7 +747,7 @@ function TutorialDetail() {
 
       <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
         <aside className="space-y-6">
-          <div className="card sticky top-24">
+          <div className="card">
             <div className="mb-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 Tutorial Sections

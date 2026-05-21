@@ -164,9 +164,12 @@ export function AuthProvider({ children }) {
       provider.addScope('email');
       
       const result = await signInWithPopup(auth, provider);
+      
+      // Check if email is in admin list OR if already has admin profile
+      const isAdminEmail = ADMIN_EMAILS.includes(result.user.email.toLowerCase());
       const adminExists = await checkAdminStatus(result.user.uid);
       
-      if (adminExists) {
+      if (isAdminEmail || adminExists) {
         await addAdminUser(result.user);
       } else {
         await addRegularUser(result.user);
